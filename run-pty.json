@@ -1,0 +1,11 @@
+[
+  {
+    "command": ["mise", "run", "dev-elm"]
+  },
+  {
+    "command": ["mise", "run", "dev-review"]
+  },
+  {
+    "command": ["mise", "run", "dev-css"]
+  }
+]
