@@ -27,7 +27,7 @@ import Quantity exposing (Quantity)
 import Rectangle2d
 import Scene3d exposing (Entity)
 import Scene3d.Material as Material
-import Sphere3d
+import Sphere3d exposing (Sphere3d)
 import Task
 
 
@@ -36,6 +36,7 @@ type Id
     | Floor
     | Table
     | Block (Block3d Meters BodyCoordinates) Color
+    | Ball (Sphere3d Meters BodyCoordinates) Color
 
 
 type alias Model =
@@ -123,6 +124,11 @@ tableOnFloor =
         Color.lightBlue
 
     --
+    , initBall
+        (Point3d.millimeters -900 130 150)
+        Color.lightBlue
+
+    --
     , initBlock
         (Point3d.millimeters 500 0 100)
         Color.lightRed
@@ -144,12 +150,18 @@ tableOnFloor =
     , initBlock
         (Point3d.millimeters 500 260 205)
         Color.lightRed
+
+    --
+    , initBall
+        (Point3d.millimeters 900 130 150)
+        Color.lightRed
     ]
 
 
+initBlock : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
 initBlock center color =
     let
-        b =
+        block =
             Block3d.centeredOn
                 (Frame3d.atPoint center)
                 ( Length.millimeters 100
@@ -157,8 +169,22 @@ initBlock center color =
                 , Length.millimeters 100
                 )
     in
-    ( Block b color
-    , Physics.block b
+    ( Block block color
+    , Physics.block block
+        Physics.Material.wood
+    )
+
+
+initBall : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
+initBall center color =
+    let
+        ball =
+            Sphere3d.atPoint
+                center
+                (Length.millimeters 60)
+    in
+    ( Ball ball color
+    , Physics.sphere ball
         Physics.Material.wood
     )
 
@@ -318,6 +344,15 @@ bodyEntity ( id, body ) =
 
             Block b c ->
                 Scene3d.blockWithShadow
+                    (Material.nonmetal
+                        { baseColor = c
+                        , roughness = 0.25
+                        }
+                    )
+                    b
+
+            Ball b c ->
+                Scene3d.sphereWithShadow
                     (Material.nonmetal
                         { baseColor = c
                         , roughness = 0.25
