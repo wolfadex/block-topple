@@ -7,8 +7,9 @@ import Browser
 import Browser.Dom
 import Browser.Events
 import Camera3d exposing (Camera3d)
-import Color
+import Color exposing (Color)
 import Direction3d
+import Frame3d
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -34,6 +35,7 @@ type Id
     = Mouse
     | Floor
     | Table
+    | Block (Block3d Meters BodyCoordinates) Color
 
 
 type alias Model =
@@ -97,14 +99,68 @@ tableBlocks =
 
 tableOnFloor : List ( Id, Body )
 tableOnFloor =
-    [ ( Table
-      , Physics.dynamic <|
-            List.map
-                (\block -> ( Physics.Shape.block block, Physics.Material.wood ))
-                tableBlocks
-      )
-    , ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
+    [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
+    , initBlock
+        (Point3d.millimeters -500 0 100)
+        Color.lightBlue
+    , initBlock
+        (Point3d.millimeters -500 105 100)
+        Color.lightBlue
+    , initBlock
+        (Point3d.millimeters -500 210 100)
+        Color.lightBlue
+    , initBlock
+        (Point3d.millimeters -500 315 100)
+        Color.lightBlue
+    , initBlock
+        (Point3d.millimeters -500 50 205)
+        Color.lightBlue
+    , initBlock
+        (Point3d.millimeters -500 155 205)
+        Color.lightBlue
+    , initBlock
+        (Point3d.millimeters -500 260 205)
+        Color.lightBlue
+
+    --
+    , initBlock
+        (Point3d.millimeters 500 0 100)
+        Color.lightRed
+    , initBlock
+        (Point3d.millimeters 500 105 100)
+        Color.lightRed
+    , initBlock
+        (Point3d.millimeters 500 210 100)
+        Color.lightRed
+    , initBlock
+        (Point3d.millimeters 500 315 100)
+        Color.lightRed
+    , initBlock
+        (Point3d.millimeters 500 50 205)
+        Color.lightRed
+    , initBlock
+        (Point3d.millimeters 500 155 205)
+        Color.lightRed
+    , initBlock
+        (Point3d.millimeters 500 260 205)
+        Color.lightRed
     ]
+
+
+initBlock center color =
+    let
+        b =
+            Block3d.centeredOn
+                (Frame3d.atPoint center)
+                ( Length.millimeters 100
+                , Length.millimeters 100
+                , Length.millimeters 100
+                )
+    in
+    ( Block b color
+    , Physics.block b
+        Physics.Material.wood
+    )
 
 
 update : Msg -> Model -> Model
@@ -259,6 +315,15 @@ bodyEntity ( id, body ) =
                     (Point3d.meters -15 15 0)
                     (Point3d.meters 15 15 0)
                     (Point3d.meters 15 -15 0)
+
+            Block b c ->
+                Scene3d.blockWithShadow
+                    (Material.nonmetal
+                        { baseColor = c
+                        , roughness = 0.25
+                        }
+                    )
+                    b
 
 
 subscriptions : Model -> Sub Msg
