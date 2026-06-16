@@ -33,6 +33,7 @@ import Scene3d exposing (Entity, backgroundColor)
 import Scene3d.Material as Material
 import Sphere3d exposing (Sphere3d)
 import Task
+import Timestep exposing (Timestep)
 import Vector3d
 
 
@@ -40,13 +41,19 @@ type Id
     = Mouse
     | Floor
     | Table
-    | Block (Block3d Meters BodyCoordinates) Color
+    | Block BlockType Color
     | RedBall (Sphere3d Meters BodyCoordinates) Color
     | BlueBall (Sphere3d Meters BodyCoordinates) Color
 
 
+type BlockType
+    = Box (Block3d Meters BodyCoordinates)
+    | Cylinder (Cylinder3d Meters BodyCoordinates)
+
+
 type alias Model =
     { bodies : List ( Id, Body )
+    , prevBodies : List ( Id, Body )
     , contacts : Physics.Contacts Id
     , dimensions : ( Quantity Int Pixels, Quantity Int Pixels )
     , dragTarget : Maybe ( Point3d Meters BodyCoordinates, Point3d Meters WorldCoordinates )
@@ -56,6 +63,7 @@ type alias Model =
     , turn : Turn
     , stage : Stage
     , elapsed : Duration
+    , timestep : Timestep
     }
 
 
@@ -94,6 +102,7 @@ main =
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { bodies = tableOnFloor
+      , prevBodies = tableOnFloor
       , contacts = Physics.emptyContacts
       , dimensions = ( Pixels.int 0, Pixels.int 0 )
       , dragTarget = Nothing
@@ -103,6 +112,11 @@ init _ =
       , turn = Red
       , stage = Aiming
       , elapsed = Duration.seconds 0
+      , timestep =
+            Timestep.init
+                { duration = Duration.seconds (1 / 120)
+                , maxSteps = 2
+                }
       }
     , Task.perform
         (\{ viewport } -> Resize (round viewport.width) (round viewport.height))
@@ -144,7 +158,7 @@ tableOnFloor =
                         Block _ _ ->
                             body
                                 |> Physics.translateBy
-                                    (Vector3d.millimeters -500 0 0)
+                                    (Vector3d.millimeters -1500 0 0)
 
                         _ ->
                             body
@@ -170,34 +184,171 @@ tableOnFloor =
 initBlockStack : Color -> List ( Id, Physics.Body )
 initBlockStack color =
     List.concat
-        [ initBlockRow 0 50 -200 7 color
-        , initBlockRow 0 150 -150 6 color
-        , [ initBlock
+        [ initBlockRow 0 -300 50 9 color
+        , initBlockRow 0 -150 150 6 color
+        , [ initBox
                 (Point3d.millimeters 0 -100 250)
                 color
-          , initBlock
+          , initBox
                 (Point3d.millimeters 0 100 250)
                 color
-          , initBlock
+          , initBox
                 (Point3d.millimeters 0 300 250)
                 color
           ]
+        , [ initBox
+                (Point3d.millimeters 100 500 50)
+                color
+          , initBox
+                (Point3d.millimeters 200 500 50)
+                color
+          , initBox
+                (Point3d.millimeters 300 500 50)
+                color
+          , initBox
+                (Point3d.millimeters 400 500 50)
+                color
+          , initBox
+                (Point3d.millimeters 500 500 50)
+                color
+          , initBox
+                (Point3d.millimeters 600 500 50)
+                color
+          , initBox
+                (Point3d.millimeters 700 500 50)
+                color
+
+          --
+          , initBox
+                (Point3d.millimeters 150 500 150)
+                color
+          , initBox
+                (Point3d.millimeters 250 500 150)
+                color
+          , initBox
+                (Point3d.millimeters 350 500 150)
+                color
+          , initBox
+                (Point3d.millimeters 450 500 150)
+                color
+          , initBox
+                (Point3d.millimeters 550 500 150)
+                color
+          , initBox
+                (Point3d.millimeters 650 500 150)
+                color
+
+          --
+          , initBox
+                (Point3d.millimeters 200 500 250)
+                color
+          , initBox
+                (Point3d.millimeters 400 500 250)
+                color
+          , initBox
+                (Point3d.millimeters 600 500 250)
+                color
+          ]
+        , initBlockRow 800 -300 50 9 color
+        , initBlockRow 800 -150 150 6 color
+        , [ initBox
+                (Point3d.millimeters 800 -100 250)
+                color
+          , initBox
+                (Point3d.millimeters 800 100 250)
+                color
+          , initBox
+                (Point3d.millimeters 800 300 250)
+                color
+          ]
+        , [ initBox
+                (Point3d.millimeters 100 -300 50)
+                color
+          , initBox
+                (Point3d.millimeters 200 -300 50)
+                color
+          , initBox
+                (Point3d.millimeters 300 -300 50)
+                color
+          , initBox
+                (Point3d.millimeters 400 -300 50)
+                color
+          , initBox
+                (Point3d.millimeters 500 -300 50)
+                color
+          , initBox
+                (Point3d.millimeters 600 -300 50)
+                color
+          , initBox
+                (Point3d.millimeters 700 -300 50)
+                color
+
+          --
+          , initBox
+                (Point3d.millimeters 150 -300 150)
+                color
+          , initBox
+                (Point3d.millimeters 250 -300 150)
+                color
+          , initBox
+                (Point3d.millimeters 350 -300 150)
+                color
+          , initBox
+                (Point3d.millimeters 450 -300 150)
+                color
+          , initBox
+                (Point3d.millimeters 550 -300 150)
+                color
+          , initBox
+                (Point3d.millimeters 650 -300 150)
+                color
+
+          --
+          , initBox
+                (Point3d.millimeters 200 -300 250)
+                color
+          , initBox
+                (Point3d.millimeters 400 -300 250)
+                color
+          , initBox
+                (Point3d.millimeters 600 -300 250)
+                color
+          ]
+        , initTower 0 500 color
+
+        -- , initTower 800 500 color
+        -- , initTower 0 -300 color
+        -- , initTower 800 -300 color
         ]
 
 
+initTower : Float -> Float -> Color -> List ( Id, Physics.Body )
+initTower xOffset yOffset color =
+    [ initCylinder
+        (Point3d.millimeters xOffset yOffset 100)
+        color
+    , initCylinder
+        (Point3d.millimeters xOffset yOffset 200)
+        color
+    , initCylinder
+        (Point3d.millimeters xOffset yOffset 300)
+        color
+    ]
+
+
 initBlockRow : Float -> Float -> Float -> Int -> Color -> List ( Id, Physics.Body )
-initBlockRow xOffset zOffset yStart count color =
+initBlockRow xOffset yStart zOffset count color =
     List.range 0 (count - 1)
         |> List.map
             (\index ->
-                initBlock
+                initBox
                     (Point3d.millimeters xOffset (yStart + toFloat index * 100) zOffset)
                     color
             )
 
 
-initBlock : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
-initBlock center color =
+initBox : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
+initBox center color =
     let
         block =
             Block3d.centeredOn
@@ -207,8 +358,25 @@ initBlock center color =
                 , Length.millimeters 100
                 )
     in
-    ( Block block color
+    ( Block (Box block) color
     , Physics.block block
+        Physics.Material.wood
+    )
+
+
+initCylinder : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
+initCylinder center color =
+    let
+        cylinder =
+            Cylinder3d.startingAt
+                center
+                Direction3d.positiveZ
+                { radius = Length.millimeters 50
+                , length = Length.millimeters 100
+                }
+    in
+    ( Block (Cylinder cylinder) color
+    , Physics.cylinder cylinder
         Physics.Material.wood
     )
 
@@ -268,8 +436,9 @@ update msg model =
                                 { onEarth
                                     | constrain = lockMouseTo pointOnTable
                                     , contacts = model.contacts
-                                    , solverIterations = 50
-                                    , duration = Duration.milliseconds delta
+
+                                    -- , solverIterations = 50
+                                    -- , duration = Duration.milliseconds (delta |> Debug.log "delta")
                                 }
                                 (( Mouse, Physics.static [] |> Physics.moveTo dragPoint )
                                     :: model.bodies
@@ -278,73 +447,7 @@ update msg model =
                     { model | bodies = List.drop 1 simulated, contacts = newContacts }
 
                 Nothing ->
-                    let
-                        ( simulated, newContacts ) =
-                            Physics.simulate
-                                { onEarth
-                                    | contacts = model.contacts
-                                    , solverIterations = 50
-                                    , duration = Duration.milliseconds delta
-                                }
-                                model.bodies
-
-                        newElapsed =
-                            case model.stage of
-                                Aiming ->
-                                    model.elapsed
-
-                                Simulating ->
-                                    Quantity.plus model.elapsed (Duration.milliseconds delta)
-
-                        newModel =
-                            { model
-                                | bodies = simulated
-                                , contacts = newContacts
-                                , elapsed = newElapsed
-                            }
-                    in
-                    if newElapsed |> Quantity.greaterThanOrEqualTo (Duration.seconds 5) then
-                        { newModel
-                            | stage = Aiming
-                            , turn =
-                                case newModel.turn of
-                                    Red ->
-                                        Blue
-
-                                    Blue ->
-                                        Red
-                            , elapsed = Duration.seconds 0
-                            , elevantionRaw = ""
-                            , rotationRaw = ""
-                            , forceRaw = ""
-                            , bodies =
-                                (case newModel.turn of
-                                    Red ->
-                                        initBlueBall
-
-                                    Blue ->
-                                        initRedBall
-                                )
-                                    :: List.filterMap
-                                        (\( id, body ) ->
-                                            case id of
-                                                RedBall _ _ ->
-                                                    Nothing
-
-                                                BlueBall _ _ ->
-                                                    Nothing
-
-                                                _ ->
-                                                    Just
-                                                        ( id
-                                                        , body
-                                                        )
-                                        )
-                                        newModel.bodies
-                        }
-
-                    else
-                        newModel
+                    Timestep.advance simulateStep (Duration.milliseconds delta) model
 
         MouseDown mouseRay ->
             case Physics.raycast mouseRay model.bodies of
@@ -477,6 +580,78 @@ update msg model =
 
                 _ ->
                     model
+
+
+simulateStep : Model -> Model
+simulateStep model =
+    let
+        ( simulated, newContacts ) =
+            Physics.simulate
+                { onEarth
+                    | contacts = model.contacts
+                    , solverIterations = 10
+                    , duration = Timestep.duration model.timestep
+                }
+                model.bodies
+
+        newElapsed =
+            case model.stage of
+                Aiming ->
+                    model.elapsed
+
+                Simulating ->
+                    Quantity.plus model.elapsed (Timestep.duration model.timestep)
+
+        newModel =
+            { model
+                | bodies = simulated
+                , prevBodies = model.bodies
+                , contacts = newContacts
+                , elapsed = newElapsed
+            }
+    in
+    if newElapsed |> Quantity.greaterThanOrEqualTo (Duration.seconds 5) then
+        { newModel
+            | stage = Aiming
+            , turn =
+                case newModel.turn of
+                    Red ->
+                        Blue
+
+                    Blue ->
+                        Red
+            , elapsed = Duration.seconds 0
+            , elevantionRaw = ""
+            , rotationRaw = ""
+            , forceRaw = ""
+            , bodies =
+                (case newModel.turn of
+                    Red ->
+                        initBlueBall
+
+                    Blue ->
+                        initRedBall
+                )
+                    :: List.filterMap
+                        (\( id, body ) ->
+                            case id of
+                                RedBall _ _ ->
+                                    Nothing
+
+                                BlueBall _ _ ->
+                                    Nothing
+
+                                _ ->
+                                    Just
+                                        ( id
+                                        , body
+                                        )
+                        )
+                        newModel.bodies
+        }
+
+    else
+        newModel
 
 
 camera : Turn -> Camera3d Meters WorldCoordinates
@@ -744,14 +919,23 @@ bodyEntity ( id, body ) =
                     (Point3d.meters 15 15 0)
                     (Point3d.meters 15 -15 0)
 
-            Block b c ->
+            Block (Box s) c ->
                 Scene3d.blockWithShadow
                     (Material.nonmetal
                         { baseColor = c
                         , roughness = 0.25
                         }
                     )
-                    b
+                    s
+
+            Block (Cylinder s) c ->
+                Scene3d.cylinderWithShadow
+                    (Material.nonmetal
+                        { baseColor = c
+                        , roughness = 0.25
+                        }
+                    )
+                    s
 
             RedBall b c ->
                 Scene3d.sphereWithShadow
