@@ -136,24 +136,50 @@ tableOnFloor =
         [ [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
           , initRedBall
           ]
-        , initBlockStack -500 Color.lightBlue
-        , initBlockStack 500 Color.lightRed
+        , initBlockStack Color.lightBlue
+            |> List.map
+                (\( id, body ) ->
+                    ( id
+                    , case id of
+                        Block _ _ ->
+                            body
+                                |> Physics.translateBy
+                                    (Vector3d.millimeters -500 0 0)
+
+                        _ ->
+                            body
+                    )
+                )
+        , initBlockStack Color.lightRed
+            |> List.map
+                (\( id, body ) ->
+                    ( id
+                    , case id of
+                        Block _ _ ->
+                            body
+                                |> Physics.translateBy
+                                    (Vector3d.millimeters 500 0 0)
+
+                        _ ->
+                            body
+                    )
+                )
         ]
 
 
-initBlockStack : Float -> Color -> List ( Id, Physics.Body )
-initBlockStack xOffset color =
+initBlockStack : Color -> List ( Id, Physics.Body )
+initBlockStack color =
     List.concat
-        [ initBlockRow xOffset 50 -210 7 color
-        , initBlockRow xOffset 155 -160 6 color
+        [ initBlockRow 0 50 -200 7 color
+        , initBlockRow 0 150 -150 6 color
         , [ initBlock
-                (Point3d.millimeters xOffset -110 260)
+                (Point3d.millimeters 0 -100 250)
                 color
           , initBlock
-                (Point3d.millimeters xOffset 100 260)
+                (Point3d.millimeters 0 100 250)
                 color
           , initBlock
-                (Point3d.millimeters xOffset 310 260)
+                (Point3d.millimeters 0 300 250)
                 color
           ]
         ]
@@ -165,7 +191,7 @@ initBlockRow xOffset zOffset yStart count color =
         |> List.map
             (\index ->
                 initBlock
-                    (Point3d.millimeters xOffset (yStart + toFloat index * 105) zOffset)
+                    (Point3d.millimeters xOffset (yStart + toFloat index * 100) zOffset)
                     color
             )
 
