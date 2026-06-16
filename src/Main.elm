@@ -50,7 +50,8 @@ type alias Model =
     , contacts : Physics.Contacts Id
     , dimensions : ( Quantity Int Pixels, Quantity Int Pixels )
     , dragTarget : Maybe ( Point3d Meters BodyCoordinates, Point3d Meters WorldCoordinates )
-    , angleRaw : String
+    , elevantionRaw : String
+    , rotationRaw : String
     , forceRaw : String
     , turn : Turn
     , stage : Stage
@@ -74,7 +75,8 @@ type Msg
     | MouseDown (Axis3d Meters WorldCoordinates)
     | MouseMove (Axis3d Meters WorldCoordinates)
     | MouseUp
-    | UserEnteredAngle String
+    | UserEnteredElevation String
+    | UserEnteredRotation String
     | UserEnteredForce String
     | UserFiredBall
 
@@ -95,7 +97,8 @@ init _ =
       , contacts = Physics.emptyContacts
       , dimensions = ( Pixels.int 0, Pixels.int 0 )
       , dragTarget = Nothing
-      , angleRaw = ""
+      , elevantionRaw = ""
+      , rotationRaw = ""
       , forceRaw = ""
       , turn = Red
       , stage = Aiming
@@ -162,11 +165,6 @@ tableOnFloor =
     --     (Point3d.millimeters -500 150 415)
     --     Color.lightBlue
     --
-    , initBlueBall
-        (Point3d.millimeters -900 130 50)
-        Color.lightBlue
-
-    --
     , initBlock
         (Point3d.millimeters 500 0 50)
         Color.lightRed
@@ -191,8 +189,6 @@ tableOnFloor =
 
     --
     , initRedBall
-        (Point3d.millimeters 900 130 50)
-        Color.lightRed
     ]
 
 
@@ -213,32 +209,42 @@ initBlock center color =
     )
 
 
-initRedBall : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
-initRedBall center color =
+initRedBall : ( Id, Physics.Body )
+initRedBall =
     let
         ball =
             Sphere3d.atPoint
-                center
+                redBallStart
                 ballRadius
     in
-    ( RedBall ball color
+    ( RedBall ball Color.lightRed
     , Physics.sphere ball
-        Physics.Material.wood
+        Physics.Material.steel
     )
 
 
-initBlueBall : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
-initBlueBall center color =
+redBallStart : Point3d Meters coordinates
+redBallStart =
+    Point3d.millimeters 900 130 50
+
+
+initBlueBall : ( Id, Physics.Body )
+initBlueBall =
     let
         ball =
             Sphere3d.atPoint
-                center
+                blueBallStart
                 ballRadius
     in
-    ( BlueBall ball color
+    ( BlueBall ball Color.lightBlue
     , Physics.sphere ball
-        Physics.Material.wood
+        Physics.Material.steel
     )
+
+
+blueBallStart : Point3d Meters coordinates
+blueBallStart =
+    Point3d.millimeters -900 130 50
 
 
 ballRadius : Length
@@ -297,15 +303,40 @@ update msg model =
                         { newModel
                             | stage = Aiming
                             , turn =
-                                case model.turn of
+                                case newModel.turn of
                                     Red ->
                                         Blue
 
                                     Blue ->
                                         Red
                             , elapsed = Duration.seconds 0
-                            , angleRaw = ""
+                            , elevantionRaw = ""
+                            , rotationRaw = ""
                             , forceRaw = ""
+                            , bodies =
+                                (case newModel.turn of
+                                    Red ->
+                                        initBlueBall
+
+                                    Blue ->
+                                        initRedBall
+                                )
+                                    :: List.filterMap
+                                        (\( id, body ) ->
+                                            case id of
+                                                RedBall _ _ ->
+                                                    Nothing
+
+                                                BlueBall _ _ ->
+                                                    Nothing
+
+                                                _ ->
+                                                    Just
+                                                        ( id
+                                                        , body
+                                                        )
+                                        )
+                                        newModel.bodies
                         }
 
                     else
@@ -348,15 +379,23 @@ update msg model =
         Resize width height ->
             { model | dimensions = ( Pixels.int width, Pixels.int height ) }
 
-        UserEnteredAngle angle ->
-            { model | angleRaw = angle }
+        UserEnteredElevation angle ->
+            { model | elevantionRaw = angle }
+
+        UserEnteredRotation angle ->
+            { model | rotationRaw = angle }
 
         UserEnteredForce force ->
             { model | forceRaw = force }
 
         UserFiredBall ->
-            case ( String.toFloat model.angleRaw, String.toFloat model.forceRaw ) of
-                ( Just angleF, Just forceF ) ->
+            case
+                ( String.toFloat model.elevantionRaw
+                , String.toFloat model.rotationRaw
+                , String.toFloat model.forceRaw
+                )
+            of
+                ( Just elevationF, Just rotationF, Just forceF ) ->
                     let
                         impulse =
                             Vector3d.withLength
@@ -378,7 +417,14 @@ update msg model =
                                             Blue ->
                                                 Direction3d.negativeY
                                         )
-                                        (Angle.degrees angleF)
+                                        (Angle.degrees elevationF)
+                                    |> Direction3d.rotateAround
+                                        Direction3d.negativeZ
+                                        (model.rotationRaw
+                                            |> String.toFloat
+                                            |> Maybe.withDefault 0
+                                            |> Angle.degrees
+                                        )
                                 )
                     in
                     { model
@@ -544,7 +590,14 @@ view model =
                                                 Blue ->
                                                     Direction3d.negativeY
                                             )
-                                            (model.angleRaw
+                                            (model.elevantionRaw
+                                                |> String.toFloat
+                                                |> Maybe.withDefault 0
+                                                |> Angle.degrees
+                                            )
+                                        |> Direction3d.rotateAround
+                                            Direction3d.negativeZ
+                                            (model.rotationRaw
                                                 |> String.toFloat
                                                 |> Maybe.withDefault 0
                                                 |> Angle.degrees
@@ -553,7 +606,9 @@ view model =
                                 arrowLength =
                                     model.forceRaw
                                         |> String.toFloat
+                                        |> Maybe.map (\f -> f / 8)
                                         |> Maybe.withDefault 50
+                                        |> max 50
                                         |> Length.millimeters
                             in
                             Scene3d.group
@@ -596,13 +651,22 @@ view model =
             , Html.Attributes.disabled (model.stage /= Aiming)
             ]
             [ Html.input
-                [ Html.Attributes.placeholder "Angle (Degrees)"
+                [ Html.Attributes.placeholder "Elevation (Degrees)"
                 , Html.Attributes.style "font-size" "1.25rem"
                 , Html.Attributes.type_ "number"
                 , Html.Attributes.min "0"
                 , Html.Attributes.step "1"
-                , Html.Attributes.value model.angleRaw
-                , Html.Events.onInput UserEnteredAngle
+                , Html.Attributes.value model.elevantionRaw
+                , Html.Events.onInput UserEnteredElevation
+                ]
+                []
+            , Html.input
+                [ Html.Attributes.placeholder "Rotation (Degrees)"
+                , Html.Attributes.style "font-size" "1.25rem"
+                , Html.Attributes.type_ "number"
+                , Html.Attributes.step "1"
+                , Html.Attributes.value model.rotationRaw
+                , Html.Events.onInput UserEnteredRotation
                 ]
                 []
             , Html.input
