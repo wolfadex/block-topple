@@ -158,7 +158,7 @@ tableOnFloor =
                         Block _ _ ->
                             body
                                 |> Physics.translateBy
-                                    (Vector3d.millimeters -1500 0 0)
+                                    (Vector3d.centimeters -1500 0 0)
 
                         _ ->
                             body
@@ -172,7 +172,7 @@ tableOnFloor =
                         Block _ _ ->
                             body
                                 |> Physics.translateBy
-                                    (Vector3d.millimeters 500 0 0)
+                                    (Vector3d.centimeters 500 0 0)
 
                         _ ->
                             body
@@ -187,151 +187,150 @@ initBlockStack color =
         [ initBlockRow 0 -300 50 9 color
         , initBlockRow 0 -150 150 6 color
         , [ initBox
-                (Point3d.millimeters 0 -100 250)
+                (Point3d.centimeters 0 -100 250)
                 color
           , initBox
-                (Point3d.millimeters 0 100 250)
+                (Point3d.centimeters 0 100 250)
                 color
           , initBox
-                (Point3d.millimeters 0 300 250)
+                (Point3d.centimeters 0 300 250)
                 color
           ]
         , [ initBox
-                (Point3d.millimeters 100 500 50)
+                (Point3d.centimeters 100 500 50)
                 color
           , initBox
-                (Point3d.millimeters 200 500 50)
+                (Point3d.centimeters 200 500 50)
                 color
           , initBox
-                (Point3d.millimeters 300 500 50)
+                (Point3d.centimeters 300 500 50)
                 color
           , initBox
-                (Point3d.millimeters 400 500 50)
+                (Point3d.centimeters 400 500 50)
                 color
           , initBox
-                (Point3d.millimeters 500 500 50)
+                (Point3d.centimeters 500 500 50)
                 color
           , initBox
-                (Point3d.millimeters 600 500 50)
+                (Point3d.centimeters 600 500 50)
                 color
           , initBox
-                (Point3d.millimeters 700 500 50)
-                color
-
-          --
-          , initBox
-                (Point3d.millimeters 150 500 150)
-                color
-          , initBox
-                (Point3d.millimeters 250 500 150)
-                color
-          , initBox
-                (Point3d.millimeters 350 500 150)
-                color
-          , initBox
-                (Point3d.millimeters 450 500 150)
-                color
-          , initBox
-                (Point3d.millimeters 550 500 150)
-                color
-          , initBox
-                (Point3d.millimeters 650 500 150)
+                (Point3d.centimeters 700 500 50)
                 color
 
           --
           , initBox
-                (Point3d.millimeters 200 500 250)
+                (Point3d.centimeters 150 500 150)
                 color
           , initBox
-                (Point3d.millimeters 400 500 250)
+                (Point3d.centimeters 250 500 150)
                 color
           , initBox
-                (Point3d.millimeters 600 500 250)
+                (Point3d.centimeters 350 500 150)
+                color
+          , initBox
+                (Point3d.centimeters 450 500 150)
+                color
+          , initBox
+                (Point3d.centimeters 550 500 150)
+                color
+          , initBox
+                (Point3d.centimeters 650 500 150)
+                color
+
+          --
+          , initBox
+                (Point3d.centimeters 200 500 250)
+                color
+          , initBox
+                (Point3d.centimeters 400 500 250)
+                color
+          , initBox
+                (Point3d.centimeters 600 500 250)
                 color
           ]
         , initBlockRow 800 -300 50 9 color
         , initBlockRow 800 -150 150 6 color
         , [ initBox
-                (Point3d.millimeters 800 -100 250)
+                (Point3d.centimeters 800 -100 250)
                 color
           , initBox
-                (Point3d.millimeters 800 100 250)
+                (Point3d.centimeters 800 100 250)
                 color
           , initBox
-                (Point3d.millimeters 800 300 250)
+                (Point3d.centimeters 800 300 250)
                 color
           ]
         , [ initBox
-                (Point3d.millimeters 100 -300 50)
+                (Point3d.centimeters 100 -300 50)
                 color
           , initBox
-                (Point3d.millimeters 200 -300 50)
+                (Point3d.centimeters 200 -300 50)
                 color
           , initBox
-                (Point3d.millimeters 300 -300 50)
+                (Point3d.centimeters 300 -300 50)
                 color
           , initBox
-                (Point3d.millimeters 400 -300 50)
+                (Point3d.centimeters 400 -300 50)
                 color
           , initBox
-                (Point3d.millimeters 500 -300 50)
+                (Point3d.centimeters 500 -300 50)
                 color
           , initBox
-                (Point3d.millimeters 600 -300 50)
+                (Point3d.centimeters 600 -300 50)
                 color
           , initBox
-                (Point3d.millimeters 700 -300 50)
-                color
-
-          --
-          , initBox
-                (Point3d.millimeters 150 -300 150)
-                color
-          , initBox
-                (Point3d.millimeters 250 -300 150)
-                color
-          , initBox
-                (Point3d.millimeters 350 -300 150)
-                color
-          , initBox
-                (Point3d.millimeters 450 -300 150)
-                color
-          , initBox
-                (Point3d.millimeters 550 -300 150)
-                color
-          , initBox
-                (Point3d.millimeters 650 -300 150)
+                (Point3d.centimeters 700 -300 50)
                 color
 
           --
           , initBox
-                (Point3d.millimeters 200 -300 250)
+                (Point3d.centimeters 150 -300 150)
                 color
           , initBox
-                (Point3d.millimeters 400 -300 250)
+                (Point3d.centimeters 250 -300 150)
                 color
           , initBox
-                (Point3d.millimeters 600 -300 250)
+                (Point3d.centimeters 350 -300 150)
+                color
+          , initBox
+                (Point3d.centimeters 450 -300 150)
+                color
+          , initBox
+                (Point3d.centimeters 550 -300 150)
+                color
+          , initBox
+                (Point3d.centimeters 650 -300 150)
+                color
+
+          --
+          , initBox
+                (Point3d.centimeters 200 -300 250)
+                color
+          , initBox
+                (Point3d.centimeters 400 -300 250)
+                color
+          , initBox
+                (Point3d.centimeters 600 -300 250)
                 color
           ]
         , initTower 0 500 color
-
-        -- , initTower 800 500 color
-        -- , initTower 0 -300 color
-        -- , initTower 800 -300 color
+        , initTower 800 500 color
+        , initTower 0 -300 color
+        , initTower 800 -300 color
         ]
 
 
 initTower : Float -> Float -> Color -> List ( Id, Physics.Body )
 initTower xOffset yOffset color =
     [ initCylinder
-        (Point3d.millimeters xOffset yOffset 100)
+        (Point3d.centimeters xOffset yOffset 100)
         color
     , initCylinder
-        (Point3d.millimeters xOffset yOffset 200)
+        (Point3d.centimeters xOffset yOffset 200)
         color
     , initCylinder
-        (Point3d.millimeters xOffset yOffset 300)
+        (Point3d.centimeters xOffset yOffset 300)
         color
     ]
 
@@ -342,7 +341,7 @@ initBlockRow xOffset yStart zOffset count color =
         |> List.map
             (\index ->
                 initBox
-                    (Point3d.millimeters xOffset (yStart + toFloat index * 100) zOffset)
+                    (Point3d.centimeters xOffset (yStart + toFloat index * 100) zOffset)
                     color
             )
 
@@ -353,9 +352,9 @@ initBox center color =
         block =
             Block3d.centeredOn
                 (Frame3d.atPoint center)
-                ( Length.millimeters 100
-                , Length.millimeters 100
-                , Length.millimeters 100
+                ( Length.centimeters 100
+                , Length.centimeters 100
+                , Length.centimeters 100
                 )
     in
     ( Block (Box block) color
@@ -371,8 +370,8 @@ initCylinder center color =
             Cylinder3d.startingAt
                 center
                 Direction3d.positiveZ
-                { radius = Length.millimeters 50
-                , length = Length.millimeters 100
+                { radius = Length.centimeters 50
+                , length = Length.centimeters 100
                 }
     in
     ( Block (Cylinder cylinder) color
@@ -397,7 +396,7 @@ initRedBall =
 
 redBallStart : Point3d Meters coordinates
 redBallStart =
-    Point3d.millimeters 900 130 50
+    Point3d.centimeters 900 130 50
 
 
 initBlueBall : ( Id, Physics.Body )
@@ -416,12 +415,12 @@ initBlueBall =
 
 blueBallStart : Point3d Meters coordinates
 blueBallStart =
-    Point3d.millimeters -900 130 50
+    Point3d.centimeters -900 130 50
 
 
 ballRadius : Length
 ballRadius =
-    Length.millimeters 60
+    Length.centimeters 60
 
 
 update : Msg -> Model -> Model
@@ -507,7 +506,7 @@ update msg model =
                         impulse =
                             Vector3d.withLength
                                 (Quantity.times (Duration.seconds 0.005)
-                                    (Force.newtons forceF)
+                                    (Force.meganewtons forceF)
                                 )
                                 ((case model.turn of
                                     Red ->
@@ -589,7 +588,6 @@ simulateStep model =
             Physics.simulate
                 { onEarth
                     | contacts = model.contacts
-                    , solverIterations = 10
                     , duration = Timestep.duration model.timestep
                 }
                 model.bodies
@@ -660,10 +658,10 @@ camera turn =
         { eyePoint =
             case turn of
                 Red ->
-                    Point3d.meters 3 4 2
+                    Point3d.meters 30 40 20
 
                 Blue ->
-                    Point3d.meters -3 4 2
+                    Point3d.meters -30 40 20
         , focalPoint =
             case turn of
                 Red ->
@@ -788,7 +786,7 @@ view model =
                                         |> Maybe.map (\f -> f / 8)
                                         |> Maybe.withDefault 50
                                         |> max 50
-                                        |> Length.millimeters
+                                        |> Length.centimeters
                             in
                             Scene3d.group
                                 [ Scene3d.cylinder
@@ -796,7 +794,7 @@ view model =
                                     (Cylinder3d.startingAt
                                         ballCenter
                                         arrowDirection
-                                        { radius = Length.millimeters 5
+                                        { radius = Length.centimeters 5
                                         , length = arrowLength
                                         }
                                     )
@@ -808,8 +806,8 @@ view model =
                                                 arrowLength
                                         )
                                         arrowDirection
-                                        { radius = Length.millimeters 15
-                                        , length = Length.millimeters 40
+                                        { radius = Length.centimeters 15
+                                        , length = Length.centimeters 40
                                         }
                                     )
                                 ]
@@ -914,10 +912,10 @@ bodyEntity ( id, body ) =
 
             Floor ->
                 Scene3d.quad (Material.matte Color.darkCharcoal)
-                    (Point3d.meters -15 -15 0)
-                    (Point3d.meters -15 15 0)
-                    (Point3d.meters 15 15 0)
-                    (Point3d.meters 15 -15 0)
+                    (Point3d.meters -90 -90 0)
+                    (Point3d.meters -90 90 0)
+                    (Point3d.meters 90 90 0)
+                    (Point3d.meters 90 -90 0)
 
             Block (Box s) c ->
                 Scene3d.blockWithShadow
