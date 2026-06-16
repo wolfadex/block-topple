@@ -132,64 +132,42 @@ tableBlocks =
 
 tableOnFloor : List ( Id, Body )
 tableOnFloor =
-    [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
-    , initBlock
-        (Point3d.millimeters -500 0 50)
-        Color.lightBlue
-    , initBlock
-        (Point3d.millimeters -500 105 50)
-        Color.lightBlue
-    , initBlock
-        (Point3d.millimeters -500 210 50)
-        Color.lightBlue
-    , initBlock
-        (Point3d.millimeters -500 315 50)
-        Color.lightBlue
-    , initBlock
-        (Point3d.millimeters -500 50 155)
-        Color.lightBlue
-    , initBlock
-        (Point3d.millimeters -500 155 155)
-        Color.lightBlue
-    , initBlock
-        (Point3d.millimeters -500 260 155)
-        Color.lightBlue
+    List.concat
+        [ [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
+          , initRedBall
+          ]
+        , initBlockStack -500 Color.lightBlue
+        , initBlockStack 500 Color.lightRed
+        ]
 
-    -- , initBlock
-    --     (Point3d.millimeters -500 50 310)
-    --     Color.lightBlue
-    -- , initBlock
-    --     (Point3d.millimeters -500 205 310)
-    --     Color.lightBlue
-    -- , initBlock
-    --     (Point3d.millimeters -500 150 415)
-    --     Color.lightBlue
-    --
-    , initBlock
-        (Point3d.millimeters 500 0 50)
-        Color.lightRed
-    , initBlock
-        (Point3d.millimeters 500 105 50)
-        Color.lightRed
-    , initBlock
-        (Point3d.millimeters 500 210 50)
-        Color.lightRed
-    , initBlock
-        (Point3d.millimeters 500 315 50)
-        Color.lightRed
-    , initBlock
-        (Point3d.millimeters 500 50 155)
-        Color.lightRed
-    , initBlock
-        (Point3d.millimeters 500 155 155)
-        Color.lightRed
-    , initBlock
-        (Point3d.millimeters 500 260 155)
-        Color.lightRed
 
-    --
-    , initRedBall
-    ]
+initBlockStack : Float -> Color -> List ( Id, Physics.Body )
+initBlockStack xOffset color =
+    List.concat
+        [ initBlockRow xOffset 50 -210 7 color
+        , initBlockRow xOffset 155 -160 6 color
+        , [ initBlock
+                (Point3d.millimeters xOffset -110 260)
+                color
+          , initBlock
+                (Point3d.millimeters xOffset 100 260)
+                color
+          , initBlock
+                (Point3d.millimeters xOffset 310 260)
+                color
+          ]
+        ]
+
+
+initBlockRow : Float -> Float -> Float -> Int -> Color -> List ( Id, Physics.Body )
+initBlockRow xOffset zOffset yStart count color =
+    List.range 0 (count - 1)
+        |> List.map
+            (\index ->
+                initBlock
+                    (Point3d.millimeters xOffset (yStart + toFloat index * 105) zOffset)
+                    color
+            )
 
 
 initBlock : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
