@@ -19,6 +19,7 @@ import Html.Attributes
 import Html.Events
 import Json.Decode exposing (Decoder)
 import Length exposing (Length, Meters)
+import Parameter1d
 import Physics exposing (Body, BodyCoordinates, WorldCoordinates, onEarth)
 import Physics.Constraint exposing (Constraint)
 import Physics.Material
@@ -34,6 +35,7 @@ import Scene3d.Material as Material
 import Sphere3d exposing (Sphere3d)
 import Task
 import Timestep exposing (Timestep)
+import TriangularMesh
 import Vector3d
 
 
@@ -49,6 +51,7 @@ type Id
 type BlockType
     = Box (Block3d Meters BodyCoordinates)
     | Cylinder (Cylinder3d Meters BodyCoordinates)
+    | Cone (Cone3d Meters BodyCoordinates)
 
 
 type alias Model =
@@ -329,9 +332,19 @@ initTower xOffset yOffset color =
     , initCylinder
         (Point3d.centimeters xOffset yOffset 200)
         color
-    , initCylinder
-        (Point3d.centimeters xOffset yOffset 300)
-        color
+    , let
+        cone =
+            Cone3d.startingAt
+                (Point3d.centimeters xOffset yOffset 300)
+                Direction3d.positiveZ
+                { radius = Length.centimeters 60
+                , length = Length.centimeters 80
+                }
+      in
+      ( Block (Cone cone) Color.gray
+      , physicsCone cone
+            Physics.Material.wood
+      )
     ]
 
 
@@ -783,9 +796,9 @@ view model =
                                 arrowLength =
                                     model.forceRaw
                                         |> String.toFloat
-                                        |> Maybe.map (\f -> f / 8)
-                                        |> Maybe.withDefault 50
-                                        |> max 50
+                                        -- |> Maybe.map (\f -> f / 4)
+                                        |> Maybe.withDefault 100
+                                        |> max 100
                                         |> Length.centimeters
                             in
                             Scene3d.group
@@ -847,11 +860,12 @@ view model =
                 ]
                 []
             , Html.input
-                [ Html.Attributes.placeholder "Force (Newtons)"
+                [ Html.Attributes.placeholder "Force (Meganewtons)"
                 , Html.Attributes.style "font-size" "1.25rem"
                 , Html.Attributes.type_ "number"
                 , Html.Attributes.min "0"
                 , Html.Attributes.step "1"
+                , Html.Attributes.max "100"
                 , Html.Attributes.value model.forceRaw
                 , Html.Events.onInput UserEnteredForce
                 ]
@@ -935,6 +949,15 @@ bodyEntity ( id, body ) =
                     )
                     s
 
+            Block (Cone s) c ->
+                Scene3d.coneWithShadow
+                    (Material.nonmetal
+                        { baseColor = c
+                        , roughness = 0.25
+                        }
+                    )
+                    s
+
             RedBall b c ->
                 Scene3d.sphereWithShadow
                     (Material.nonmetal
@@ -988,3 +1011,63 @@ decodeMouseRay turn ( width, height ) rayToMsg =
         )
         (Json.Decode.field "pageX" Json.Decode.float)
         (Json.Decode.field "pageY" Json.Decode.float)
+
+
+
+--
+
+
+physicsCone : Cone3d Meters BodyCoordinates -> Physics.Material.Material Physics.Material.Dense -> Body
+physicsCone sourceCone material =
+    let
+        bottomCenter =
+            Cone3d.basePoint sourceCone
+
+        tip =
+            Cone3d.tipPoint sourceCone
+
+        radius =
+            Cone3d.radius sourceCone
+                |> Length.inMeters
+
+        bottom =
+            TriangularMesh.radial bottomCenter <|
+                Parameter1d.leading 12 <|
+                    \u ->
+                        let
+                            theta =
+                                2 * pi * u
+
+                            sinTheta =
+                                sin theta
+
+                            cosTheta =
+                                cos theta
+                        in
+                        bottomCenter
+                            |> Point3d.translateBy
+                                (Vector3d.unsafe { x = cosTheta * radius, y = -sinTheta * radius, z = 0 })
+
+        sides =
+            TriangularMesh.radial tip <|
+                Parameter1d.leading 12 <|
+                    \u ->
+                        let
+                            theta =
+                                2 * pi * u
+
+                            sinTheta =
+                                sin theta
+
+                            cosTheta =
+                                cos theta
+                        in
+                        bottomCenter
+                            |> Point3d.translateBy
+                                (Vector3d.unsafe { x = cosTheta * radius, y = sinTheta * radius, z = 0 })
+    in
+    Physics.dynamic
+        [ ( Physics.Shape.unsafeConvex (TriangularMesh.combine [ bottom, sides ])
+          , material
+          )
+        ]
