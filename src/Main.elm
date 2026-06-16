@@ -8,6 +8,7 @@ import Browser.Dom
 import Browser.Events
 import Camera3d exposing (Camera3d)
 import Color exposing (Color)
+import Cylinder3d exposing (Cylinder3d)
 import Direction3d
 import Duration
 import Force exposing (Force)
@@ -48,19 +49,19 @@ type alias Model =
     , contacts : Physics.Contacts Id
     , dimensions : ( Quantity Int Pixels, Quantity Int Pixels )
     , dragTarget : Maybe ( Point3d Meters BodyCoordinates, Point3d Meters WorldCoordinates )
-    , redAngle : Angle
-    , redForce : Force
+    , redAngleRaw : String
+    , redForceRaw : String
     }
 
 
 type Msg
-    = Tick
+    = Tick Float
     | Resize Int Int
     | MouseDown (Axis3d Meters WorldCoordinates)
     | MouseMove (Axis3d Meters WorldCoordinates)
     | MouseUp
-    | UserEnteredRedAngle Angle
-    | UserEnteredRedForce Force
+    | UserEnteredRedAngle String
+    | UserEnteredRedForce String
     | UserFiredRedBall
 
 
@@ -80,8 +81,8 @@ init _ =
       , contacts = Physics.emptyContacts
       , dimensions = ( Pixels.int 0, Pixels.int 0 )
       , dragTarget = Nothing
-      , redAngle = Angle.degrees 0
-      , redForce = Force.newtons 0
+      , redAngleRaw = ""
+      , redForceRaw = ""
       }
     , Task.perform
         (\{ viewport } -> Resize (round viewport.width) (round viewport.height))
@@ -134,6 +135,15 @@ tableOnFloor =
         (Point3d.millimeters -500 260 205)
         Color.lightBlue
 
+    -- , initBlock
+    --     (Point3d.millimeters -500 100 310)
+    --     Color.lightBlue
+    -- , initBlock
+    --     (Point3d.millimeters -500 205 310)
+    --     Color.lightBlue
+    -- , initBlock
+    --     (Point3d.millimeters -500 150 415)
+    --     Color.lightBlue
     --
     , initBlueBall
         (Point3d.millimeters -900 130 150)
@@ -222,13 +232,18 @@ ballRadius =
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        Tick ->
+        Tick delta ->
             case model.dragTarget of
                 Just ( pointOnTable, dragPoint ) ->
                     let
                         ( simulated, newContacts ) =
                             Physics.simulate
-                                { onEarth | constrain = lockMouseTo pointOnTable, contacts = model.contacts }
+                                { onEarth
+                                    | constrain = lockMouseTo pointOnTable
+                                    , contacts = model.contacts
+                                    , solverIterations = 50
+                                    , duration = Duration.milliseconds delta
+                                }
                                 (( Mouse, Physics.static [] |> Physics.moveTo dragPoint )
                                     :: model.bodies
                                 )
@@ -238,7 +253,13 @@ update msg model =
                 Nothing ->
                     let
                         ( simulated, newContacts ) =
-                            Physics.simulate { onEarth | contacts = model.contacts } model.bodies
+                            Physics.simulate
+                                { onEarth
+                                    | contacts = model.contacts
+                                    , solverIterations = 50
+                                    , duration = Duration.milliseconds delta
+                                }
+                                model.bodies
                     in
                     { model | bodies = simulated, contacts = newContacts }
 
@@ -280,48 +301,55 @@ update msg model =
             { model | dimensions = ( Pixels.int width, Pixels.int height ) }
 
         UserEnteredRedAngle angle ->
-            { model | redAngle = angle }
+            { model | redAngleRaw = angle }
 
         UserEnteredRedForce force ->
-            { model | redForce = force }
+            { model | redForceRaw = force }
 
         UserFiredRedBall ->
-            { model
-                | bodies =
-                    List.map
-                        (\( id, body ) ->
-                            ( id
-                            , case id of
-                                RedBall _ _ ->
-                                    let
-                                        impulse =
-                                            Vector3d.withLength
-                                                (Quantity.times (Duration.seconds 0.005)
-                                                    model.redForce
+            case ( String.toFloat model.redAngleRaw, String.toFloat model.redForceRaw ) of
+                ( Just angleF, Just forceF ) ->
+                    { model
+                        | bodies =
+                            List.map
+                                (\( id, body ) ->
+                                    ( id
+                                    , case id of
+                                        RedBall _ _ ->
+                                            let
+                                                impulse =
+                                                    Vector3d.withLength
+                                                        (Quantity.times (Duration.seconds 0.005)
+                                                            (Force.newtons forceF)
+                                                        )
+                                                        (Direction3d.negativeX
+                                                            |> Direction3d.rotateAround
+                                                                Direction3d.positiveY
+                                                                (Angle.degrees angleF)
+                                                        )
+                                            in
+                                            Physics.applyImpulse
+                                                impulse
+                                                (Physics.centerOfMass body
+                                                    |> Debug.log "shoot orig"
+                                                    |> Maybe.withDefault Point3d.origin
+                                                    |> Point3d.translateBy
+                                                        (Vector3d.scaleTo ballRadius impulse)
                                                 )
-                                                (Direction3d.negativeX
-                                                    |> Direction3d.rotateAround
-                                                        Direction3d.negativeY
-                                                        model.redAngle
-                                                )
-                                    in
-                                    Physics.applyImpulse
-                                        impulse
-                                        (Physics.originPoint body
-                                            |> Point3d.translateBy
-                                                (Vector3d.scaleTo ballRadius impulse)
-                                        )
-                                        body
+                                                body
 
-                                BlueBall _ _ ->
-                                    body
+                                        BlueBall _ _ ->
+                                            body
 
-                                _ ->
-                                    body
-                            )
-                        )
-                        model.bodies
-            }
+                                        _ ->
+                                            body
+                                    )
+                                )
+                                model.bodies
+                    }
+
+                _ ->
+                    model
 
 
 camera : Camera3d Meters WorldCoordinates
@@ -382,7 +410,37 @@ view model =
                                 Nothing ->
                                     Scene3d.nothing
                     in
-                    mouseEntity :: List.map bodyEntity model.bodies
+                    Scene3d.cylinder
+                        (Material.matte Color.green)
+                        (Cylinder3d.startingAt
+                            (listFindMap
+                                (\( id, body ) ->
+                                    case id of
+                                        RedBall _ _ ->
+                                            Physics.centerOfMass body
+
+                                        _ ->
+                                            Nothing
+                                )
+                                model.bodies
+                                |> Debug.log "ball orig"
+                                |> Maybe.withDefault Point3d.origin
+                            )
+                            (Direction3d.negativeX
+                                |> Direction3d.rotateAround
+                                    Direction3d.positiveY
+                                    (model.redAngleRaw
+                                        |> String.toFloat
+                                        |> Maybe.withDefault 0
+                                        |> Angle.degrees
+                                    )
+                            )
+                            { radius = Length.millimeters 5
+                            , length = Length.millimeters 200
+                            }
+                        )
+                        :: mouseEntity
+                        :: List.map bodyEntity model.bodies
                 }
             ]
         , Html.form
@@ -398,16 +456,8 @@ view model =
                 , Html.Attributes.type_ "number"
                 , Html.Attributes.min "0"
                 , Html.Attributes.step "1"
-                , model.redAngle
-                    |> Angle.inDegrees
-                    |> String.fromFloat
-                    |> Html.Attributes.value
-                , Html.Events.onInput
-                    (String.toFloat
-                        >> Maybe.map Angle.degrees
-                        >> Maybe.withDefault model.redAngle
-                        >> UserEnteredRedAngle
-                    )
+                , Html.Attributes.value model.redAngleRaw
+                , Html.Events.onInput UserEnteredRedAngle
                 ]
                 []
             , Html.input
@@ -416,16 +466,8 @@ view model =
                 , Html.Attributes.type_ "number"
                 , Html.Attributes.min "0"
                 , Html.Attributes.step "1"
-                , model.redForce
-                    |> Force.inNewtons
-                    |> String.fromFloat
-                    |> Html.Attributes.value
-                , Html.Events.onInput
-                    (String.toFloat
-                        >> Maybe.map Force.newtons
-                        >> Maybe.withDefault model.redForce
-                        >> UserEnteredRedForce
-                    )
+                , Html.Attributes.value model.redForceRaw
+                , Html.Events.onInput UserEnteredRedForce
                 ]
                 []
             , Html.button
@@ -435,6 +477,21 @@ view model =
             ]
         ]
     }
+
+
+listFindMap : (a -> Maybe b) -> List a -> Maybe b
+listFindMap pred list =
+    case list of
+        [] ->
+            Nothing
+
+        next :: rest ->
+            case pred next of
+                Just b ->
+                    Just b
+
+                Nothing ->
+                    listFindMap pred rest
 
 
 bodyEntity : ( Id, Body ) -> Entity WorldCoordinates
@@ -496,7 +553,7 @@ subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ Browser.Events.onResize Resize
-        , Browser.Events.onAnimationFrame (\_ -> Tick)
+        , Browser.Events.onAnimationFrameDelta Tick
         ]
 
 
