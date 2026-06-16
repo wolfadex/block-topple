@@ -11,7 +11,7 @@ import Color exposing (Color)
 import Cone3d exposing (Cone3d)
 import Cylinder3d exposing (Cylinder3d)
 import Direction3d
-import Duration
+import Duration exposing (Duration)
 import Force exposing (Force)
 import Frame3d
 import Html exposing (Html)
@@ -29,7 +29,7 @@ import Point2d
 import Point3d exposing (Point3d)
 import Quantity exposing (Quantity)
 import Rectangle2d
-import Scene3d exposing (Entity)
+import Scene3d exposing (Entity, backgroundColor)
 import Scene3d.Material as Material
 import Sphere3d exposing (Sphere3d)
 import Task
@@ -50,9 +50,22 @@ type alias Model =
     , contacts : Physics.Contacts Id
     , dimensions : ( Quantity Int Pixels, Quantity Int Pixels )
     , dragTarget : Maybe ( Point3d Meters BodyCoordinates, Point3d Meters WorldCoordinates )
-    , redAngleRaw : String
-    , redForceRaw : String
+    , angleRaw : String
+    , forceRaw : String
+    , turn : Turn
+    , stage : Stage
+    , elapsed : Duration
     }
+
+
+type Turn
+    = Red
+    | Blue
+
+
+type Stage
+    = Aiming
+    | Simulating
 
 
 type Msg
@@ -61,9 +74,9 @@ type Msg
     | MouseDown (Axis3d Meters WorldCoordinates)
     | MouseMove (Axis3d Meters WorldCoordinates)
     | MouseUp
-    | UserEnteredRedAngle String
-    | UserEnteredRedForce String
-    | UserFiredRedBall
+    | UserEnteredAngle String
+    | UserEnteredForce String
+    | UserFiredBall
 
 
 main : Program () Model Msg
@@ -82,8 +95,11 @@ init _ =
       , contacts = Physics.emptyContacts
       , dimensions = ( Pixels.int 0, Pixels.int 0 )
       , dragTarget = Nothing
-      , redAngleRaw = ""
-      , redForceRaw = ""
+      , angleRaw = ""
+      , forceRaw = ""
+      , turn = Red
+      , stage = Aiming
+      , elapsed = Duration.seconds 0
       }
     , Task.perform
         (\{ viewport } -> Resize (round viewport.width) (round viewport.height))
@@ -115,29 +131,29 @@ tableOnFloor : List ( Id, Body )
 tableOnFloor =
     [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
     , initBlock
-        (Point3d.millimeters -500 0 100)
+        (Point3d.millimeters -500 0 50)
         Color.lightBlue
     , initBlock
-        (Point3d.millimeters -500 105 100)
+        (Point3d.millimeters -500 105 50)
         Color.lightBlue
     , initBlock
-        (Point3d.millimeters -500 210 100)
+        (Point3d.millimeters -500 210 50)
         Color.lightBlue
     , initBlock
-        (Point3d.millimeters -500 315 100)
+        (Point3d.millimeters -500 315 50)
         Color.lightBlue
     , initBlock
-        (Point3d.millimeters -500 50 205)
+        (Point3d.millimeters -500 50 155)
         Color.lightBlue
     , initBlock
-        (Point3d.millimeters -500 155 205)
+        (Point3d.millimeters -500 155 155)
         Color.lightBlue
     , initBlock
-        (Point3d.millimeters -500 260 205)
+        (Point3d.millimeters -500 260 155)
         Color.lightBlue
 
     -- , initBlock
-    --     (Point3d.millimeters -500 100 310)
+    --     (Point3d.millimeters -500 50 310)
     --     Color.lightBlue
     -- , initBlock
     --     (Point3d.millimeters -500 205 310)
@@ -147,35 +163,35 @@ tableOnFloor =
     --     Color.lightBlue
     --
     , initBlueBall
-        (Point3d.millimeters -900 130 150)
+        (Point3d.millimeters -900 130 50)
         Color.lightBlue
 
     --
     , initBlock
-        (Point3d.millimeters 500 0 100)
+        (Point3d.millimeters 500 0 50)
         Color.lightRed
     , initBlock
-        (Point3d.millimeters 500 105 100)
+        (Point3d.millimeters 500 105 50)
         Color.lightRed
     , initBlock
-        (Point3d.millimeters 500 210 100)
+        (Point3d.millimeters 500 210 50)
         Color.lightRed
     , initBlock
-        (Point3d.millimeters 500 315 100)
+        (Point3d.millimeters 500 315 50)
         Color.lightRed
     , initBlock
-        (Point3d.millimeters 500 50 205)
+        (Point3d.millimeters 500 50 155)
         Color.lightRed
     , initBlock
-        (Point3d.millimeters 500 155 205)
+        (Point3d.millimeters 500 155 155)
         Color.lightRed
     , initBlock
-        (Point3d.millimeters 500 260 205)
+        (Point3d.millimeters 500 260 155)
         Color.lightRed
 
     --
     , initRedBall
-        (Point3d.millimeters 900 130 150)
+        (Point3d.millimeters 900 130 50)
         Color.lightRed
     ]
 
@@ -261,8 +277,39 @@ update msg model =
                                     , duration = Duration.milliseconds delta
                                 }
                                 model.bodies
+
+                        newElapsed =
+                            case model.stage of
+                                Aiming ->
+                                    model.elapsed
+
+                                Simulating ->
+                                    Quantity.plus model.elapsed (Duration.milliseconds delta)
+
+                        newModel =
+                            { model
+                                | bodies = simulated
+                                , contacts = newContacts
+                                , elapsed = newElapsed
+                            }
                     in
-                    { model | bodies = simulated, contacts = newContacts }
+                    if newElapsed |> Quantity.greaterThanOrEqualTo (Duration.seconds 5) then
+                        { newModel
+                            | stage = Aiming
+                            , turn =
+                                case model.turn of
+                                    Red ->
+                                        Blue
+
+                                    Blue ->
+                                        Red
+                            , elapsed = Duration.seconds 0
+                            , angleRaw = ""
+                            , forceRaw = ""
+                        }
+
+                    else
+                        newModel
 
         MouseDown mouseRay ->
             case Physics.raycast mouseRay model.bodies of
@@ -281,7 +328,7 @@ update msg model =
                 Just ( pointOnTable, dragPoint ) ->
                     let
                         plane =
-                            Plane3d.through dragPoint (Camera3d.viewDirection camera)
+                            Plane3d.through dragPoint (Camera3d.viewDirection (camera model.turn))
                     in
                     { model
                         | dragTarget =
@@ -301,45 +348,75 @@ update msg model =
         Resize width height ->
             { model | dimensions = ( Pixels.int width, Pixels.int height ) }
 
-        UserEnteredRedAngle angle ->
-            { model | redAngleRaw = angle }
+        UserEnteredAngle angle ->
+            { model | angleRaw = angle }
 
-        UserEnteredRedForce force ->
-            { model | redForceRaw = force }
+        UserEnteredForce force ->
+            { model | forceRaw = force }
 
-        UserFiredRedBall ->
-            case ( String.toFloat model.redAngleRaw, String.toFloat model.redForceRaw ) of
+        UserFiredBall ->
+            case ( String.toFloat model.angleRaw, String.toFloat model.forceRaw ) of
                 ( Just angleF, Just forceF ) ->
+                    let
+                        impulse =
+                            Vector3d.withLength
+                                (Quantity.times (Duration.seconds 0.005)
+                                    (Force.newtons forceF)
+                                )
+                                ((case model.turn of
+                                    Red ->
+                                        Direction3d.negativeX
+
+                                    Blue ->
+                                        Direction3d.positiveX
+                                 )
+                                    |> Direction3d.rotateAround
+                                        (case model.turn of
+                                            Red ->
+                                                Direction3d.positiveY
+
+                                            Blue ->
+                                                Direction3d.negativeY
+                                        )
+                                        (Angle.degrees angleF)
+                                )
+                    in
                     { model
-                        | bodies =
+                        | stage = Simulating
+                        , bodies =
                             List.map
                                 (\( id, body ) ->
                                     ( id
                                     , case id of
                                         RedBall _ _ ->
-                                            let
-                                                impulse =
-                                                    Vector3d.withLength
-                                                        (Quantity.times (Duration.seconds 0.005)
-                                                            (Force.newtons forceF)
+                                            case model.turn of
+                                                Red ->
+                                                    Physics.applyImpulse
+                                                        impulse
+                                                        (Physics.centerOfMass body
+                                                            |> Maybe.withDefault Point3d.origin
+                                                            |> Point3d.translateBy
+                                                                (Vector3d.scaleTo ballRadius impulse)
                                                         )
-                                                        (Direction3d.negativeX
-                                                            |> Direction3d.rotateAround
-                                                                Direction3d.positiveY
-                                                                (Angle.degrees angleF)
-                                                        )
-                                            in
-                                            Physics.applyImpulse
-                                                impulse
-                                                (Physics.centerOfMass body
-                                                    |> Maybe.withDefault Point3d.origin
-                                                    |> Point3d.translateBy
-                                                        (Vector3d.scaleTo ballRadius impulse)
-                                                )
-                                                body
+                                                        body
+
+                                                Blue ->
+                                                    body
 
                                         BlueBall _ _ ->
-                                            body
+                                            case model.turn of
+                                                Blue ->
+                                                    Physics.applyImpulse
+                                                        impulse
+                                                        (Physics.centerOfMass body
+                                                            |> Maybe.withDefault Point3d.origin
+                                                            |> Point3d.translateBy
+                                                                (Vector3d.scaleTo ballRadius impulse)
+                                                        )
+                                                        body
+
+                                                Red ->
+                                                    body
 
                                         _ ->
                                             body
@@ -352,11 +429,23 @@ update msg model =
                     model
 
 
-camera : Camera3d Meters WorldCoordinates
-camera =
+camera : Turn -> Camera3d Meters WorldCoordinates
+camera turn =
     Camera3d.lookAt
-        { eyePoint = Point3d.meters 3 4 2
-        , focalPoint = Point3d.meters -0.5 -0.5 0
+        { eyePoint =
+            case turn of
+                Red ->
+                    Point3d.meters 3 4 2
+
+                Blue ->
+                    Point3d.meters -3 4 2
+        , focalPoint =
+            case turn of
+                Red ->
+                    Point3d.meters -0.5 -0.5 0
+
+                Blue ->
+                    Point3d.meters 0.5 -0.5 0
         , upDirection = Direction3d.positiveZ
         , projection = Camera3d.Perspective
         , fov = Camera3d.angle (Angle.degrees 24)
@@ -387,15 +476,15 @@ view model =
             [ Html.Attributes.style "position" "absolute"
             , Html.Attributes.style "left" "0"
             , Html.Attributes.style "top" "0"
-            , Html.Events.on "mousedown" (decodeMouseRay model.dimensions MouseDown)
-            , Html.Events.on "mousemove" (decodeMouseRay model.dimensions MouseMove)
+            , Html.Events.on "mousedown" (decodeMouseRay model.turn model.dimensions MouseDown)
+            , Html.Events.on "mousemove" (decodeMouseRay model.turn model.dimensions MouseMove)
             , Html.Events.onMouseUp MouseUp
             ]
             [ Scene3d.sunny
                 { upDirection = Direction3d.positiveZ
                 , sunlightDirection = Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -60)
                 , shadows = True
-                , camera = camera
+                , camera = camera model.turn
                 , dimensions = model.dimensions
                 , background = Scene3d.transparentBackground
                 , clipDepth = Length.meters 0.1
@@ -415,51 +504,85 @@ view model =
                                 (\( id, body ) ->
                                     case id of
                                         RedBall _ _ ->
-                                            Physics.centerOfMass body
+                                            case model.turn of
+                                                Red ->
+                                                    Physics.centerOfMass body
+
+                                                Blue ->
+                                                    Nothing
+
+                                        BlueBall _ _ ->
+                                            case model.turn of
+                                                Blue ->
+                                                    Physics.centerOfMass body
+
+                                                Red ->
+                                                    Nothing
 
                                         _ ->
                                             Nothing
                                 )
                                 model.bodies
                                 |> Maybe.withDefault Point3d.origin
-
-                        arrowDirection =
-                            Direction3d.negativeX
-                                |> Direction3d.rotateAround
-                                    Direction3d.positiveY
-                                    (model.redAngleRaw
-                                        |> String.toFloat
-                                        |> Maybe.withDefault 0
-                                        |> Angle.degrees
-                                    )
-
-                        arrowLength =
-                            model.redForceRaw
-                                |> String.toFloat
-                                |> Maybe.withDefault 50
-                                |> Length.millimeters
                     in
-                    Scene3d.cylinder
-                        (Material.matte Color.green)
-                        (Cylinder3d.startingAt
-                            ballCenter
-                            arrowDirection
-                            { radius = Length.millimeters 5
-                            , length = arrowLength
-                            }
-                        )
-                        :: Scene3d.cone
-                            (Material.matte Color.green)
-                            (Cone3d.startingAt
-                                (ballCenter
-                                    |> Point3d.translateIn arrowDirection
-                                        arrowLength
-                                )
-                                arrowDirection
-                                { radius = Length.millimeters 15
-                                , length = Length.millimeters 40
-                                }
-                            )
+                    (case model.stage of
+                        Aiming ->
+                            let
+                                arrowDirection =
+                                    (case model.turn of
+                                        Red ->
+                                            Direction3d.negativeX
+
+                                        Blue ->
+                                            Direction3d.positiveX
+                                    )
+                                        |> Direction3d.rotateAround
+                                            (case model.turn of
+                                                Red ->
+                                                    Direction3d.positiveY
+
+                                                Blue ->
+                                                    Direction3d.negativeY
+                                            )
+                                            (model.angleRaw
+                                                |> String.toFloat
+                                                |> Maybe.withDefault 0
+                                                |> Angle.degrees
+                                            )
+
+                                arrowLength =
+                                    model.forceRaw
+                                        |> String.toFloat
+                                        |> Maybe.withDefault 50
+                                        |> Length.millimeters
+                            in
+                            Scene3d.group
+                                [ Scene3d.cylinder
+                                    (Material.matte Color.green)
+                                    (Cylinder3d.startingAt
+                                        ballCenter
+                                        arrowDirection
+                                        { radius = Length.millimeters 5
+                                        , length = arrowLength
+                                        }
+                                    )
+                                , Scene3d.cone
+                                    (Material.matte Color.green)
+                                    (Cone3d.startingAt
+                                        (ballCenter
+                                            |> Point3d.translateIn arrowDirection
+                                                arrowLength
+                                        )
+                                        arrowDirection
+                                        { radius = Length.millimeters 15
+                                        , length = Length.millimeters 40
+                                        }
+                                    )
+                                ]
+
+                        Simulating ->
+                            Scene3d.nothing
+                    )
                         :: mouseEntity
                         :: List.map bodyEntity model.bodies
                 }
@@ -469,7 +592,8 @@ view model =
             , Html.Attributes.style "display" "flex"
             , Html.Attributes.style "flex-direction" "column"
             , Html.Attributes.style "gap" "0.5rem"
-            , Html.Events.onSubmit UserFiredRedBall
+            , Html.Events.onSubmit UserFiredBall
+            , Html.Attributes.disabled (model.stage /= Aiming)
             ]
             [ Html.input
                 [ Html.Attributes.placeholder "Angle (Degrees)"
@@ -477,8 +601,8 @@ view model =
                 , Html.Attributes.type_ "number"
                 , Html.Attributes.min "0"
                 , Html.Attributes.step "1"
-                , Html.Attributes.value model.redAngleRaw
-                , Html.Events.onInput UserEnteredRedAngle
+                , Html.Attributes.value model.angleRaw
+                , Html.Events.onInput UserEnteredAngle
                 ]
                 []
             , Html.input
@@ -487,12 +611,22 @@ view model =
                 , Html.Attributes.type_ "number"
                 , Html.Attributes.min "0"
                 , Html.Attributes.step "1"
-                , Html.Attributes.value model.redForceRaw
-                , Html.Events.onInput UserEnteredRedForce
+                , Html.Attributes.value model.forceRaw
+                , Html.Events.onInput UserEnteredForce
                 ]
                 []
             , Html.button
                 [ Html.Attributes.type_ "submit"
+                , Html.Attributes.style "font-size" "1.25rem"
+                , Html.Attributes.style "border" "none"
+                , Html.Attributes.style "color" "white"
+                , Html.Attributes.style "background-color" <|
+                    case model.turn of
+                        Red ->
+                            "red"
+
+                        Blue ->
+                            "blue"
                 ]
                 [ Html.text "Fire!" ]
             ]
@@ -571,22 +705,28 @@ bodyEntity ( id, body ) =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
+subscriptions model =
     Sub.batch
         [ Browser.Events.onResize Resize
-        , Browser.Events.onAnimationFrameDelta Tick
+        , case model.stage of
+            Aiming ->
+                Sub.none
+
+            Simulating ->
+                Browser.Events.onAnimationFrameDelta Tick
         ]
 
 
 decodeMouseRay :
-    ( Quantity Int Pixels, Quantity Int Pixels )
+    Turn
+    -> ( Quantity Int Pixels, Quantity Int Pixels )
     -> (Axis3d Meters WorldCoordinates -> msg)
     -> Decoder msg
-decodeMouseRay ( width, height ) rayToMsg =
+decodeMouseRay turn ( width, height ) rayToMsg =
     Json.Decode.map2
         (\x y ->
             rayToMsg <|
-                Camera3d.ray camera
+                Camera3d.ray (camera turn)
                     (Rectangle2d.with
                         { x1 = Quantity.zero
                         , y1 = Quantity.toFloatQuantity height
