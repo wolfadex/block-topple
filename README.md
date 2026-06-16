@@ -1,6 +1,6 @@
-# Elm Template Minimal
+# Block Topple
 
-A basic template for tiny Elm projects.
+A game about toppling block walls
 
 ## Features
 - [elm-watch](https://lydell.github.io/elm-watch/what-elm-watch-is/) for live reloading and dev server
