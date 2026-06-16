@@ -8,6 +8,7 @@ import Browser.Dom
 import Browser.Events
 import Camera3d exposing (Camera3d)
 import Color exposing (Color)
+import Cone3d exposing (Cone3d)
 import Cylinder3d exposing (Cylinder3d)
 import Direction3d
 import Duration
@@ -331,7 +332,6 @@ update msg model =
                                             Physics.applyImpulse
                                                 impulse
                                                 (Physics.centerOfMass body
-                                                    |> Debug.log "shoot orig"
                                                     |> Maybe.withDefault Point3d.origin
                                                     |> Point3d.translateBy
                                                         (Vector3d.scaleTo ballRadius impulse)
@@ -409,11 +409,9 @@ view model =
 
                                 Nothing ->
                                     Scene3d.nothing
-                    in
-                    Scene3d.cylinder
-                        (Material.matte Color.green)
-                        (Cylinder3d.startingAt
-                            (listFindMap
+
+                        ballCenter =
+                            listFindMap
                                 (\( id, body ) ->
                                     case id of
                                         RedBall _ _ ->
@@ -423,10 +421,10 @@ view model =
                                             Nothing
                                 )
                                 model.bodies
-                                |> Debug.log "ball orig"
                                 |> Maybe.withDefault Point3d.origin
-                            )
-                            (Direction3d.negativeX
+
+                        arrowDirection =
+                            Direction3d.negativeX
                                 |> Direction3d.rotateAround
                                     Direction3d.positiveY
                                     (model.redAngleRaw
@@ -434,11 +432,34 @@ view model =
                                         |> Maybe.withDefault 0
                                         |> Angle.degrees
                                     )
-                            )
+
+                        arrowLength =
+                            model.redForceRaw
+                                |> String.toFloat
+                                |> Maybe.withDefault 50
+                                |> Length.millimeters
+                    in
+                    Scene3d.cylinder
+                        (Material.matte Color.green)
+                        (Cylinder3d.startingAt
+                            ballCenter
+                            arrowDirection
                             { radius = Length.millimeters 5
-                            , length = Length.millimeters 200
+                            , length = arrowLength
                             }
                         )
+                        :: Scene3d.cone
+                            (Material.matte Color.green)
+                            (Cone3d.startingAt
+                                (ballCenter
+                                    |> Point3d.translateIn arrowDirection
+                                        arrowLength
+                                )
+                                arrowDirection
+                                { radius = Length.millimeters 15
+                                , length = Length.millimeters 40
+                                }
+                            )
                         :: mouseEntity
                         :: List.map bodyEntity model.bodies
                 }
