@@ -54,9 +54,7 @@ main =
 
 
 type Id
-    = Mouse
-    | Floor
-    | Table
+    = Floor
     | Block BlockType Color
     | RedBall (Sphere3d Meters BodyCoordinates) Color
     | BlueBall (Sphere3d Meters BodyCoordinates) Color
@@ -73,7 +71,6 @@ type alias Model =
     , prevBodies : List ( Id, Body )
     , contacts : Physics.Contacts Id
     , dimensions : ( Quantity Int Pixels, Quantity Int Pixels )
-    , dragTarget : Maybe ( Point3d Meters BodyCoordinates, Point3d Meters WorldCoordinates )
     , elevantionRaw : String
     , rotationRaw : String
     , forceRaw : String
@@ -113,7 +110,6 @@ init _ =
       , prevBodies = tableOnFloor
       , contacts = Physics.emptyContacts
       , dimensions = ( Pixels.int 0, Pixels.int 0 )
-      , dragTarget = Nothing
       , elevantionRaw = ""
       , rotationRaw = ""
       , forceRaw = ""
@@ -173,26 +169,6 @@ loadCylinder =
                     (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
                 )
         }
-
-
-tableBlocks : List (Block3d Meters BodyCoordinates)
-tableBlocks =
-    [ Block3d.from
-        (Point3d.millimeters 222 222 0)
-        (Point3d.millimeters 272 272 400)
-    , Block3d.from
-        (Point3d.millimeters -272 222 0)
-        (Point3d.millimeters -222 272 400)
-    , Block3d.from
-        (Point3d.millimeters -272 -272 0)
-        (Point3d.millimeters -222 -222 400)
-    , Block3d.from
-        (Point3d.millimeters 222 -272 0)
-        (Point3d.millimeters 272 -222 400)
-    , Block3d.from
-        (Point3d.millimeters -275 -275 400)
-        (Point3d.millimeters 275 275 450)
-    ]
 
 
 tableOnFloor : List ( Id, Body )
@@ -491,9 +467,6 @@ type Msg
     | BoxBlueTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | CylinderMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
     | Tick Float
-    | MouseDown (Axis3d Meters WorldCoordinates)
-    | MouseMove (Axis3d Meters WorldCoordinates)
-    | MouseUp
     | UserEnteredElevation String
     | UserEnteredRotation String
     | UserEnteredForce String
@@ -532,60 +505,7 @@ update msg model =
             { model | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh ) }
 
         Tick delta ->
-            case model.dragTarget of
-                Just ( pointOnTable, dragPoint ) ->
-                    let
-                        ( simulated, newContacts ) =
-                            Physics.simulate
-                                { onEarth
-                                    | constrain = lockMouseTo pointOnTable
-                                    , contacts = model.contacts
-
-                                    -- , solverIterations = 50
-                                    -- , duration = Duration.milliseconds (delta |> Debug.log "delta")
-                                }
-                                (( Mouse, Physics.static [] |> Physics.moveTo dragPoint )
-                                    :: model.bodies
-                                )
-                    in
-                    { model | bodies = List.drop 1 simulated, contacts = newContacts }
-
-                Nothing ->
-                    Timestep.advance simulateStep (Duration.milliseconds delta) model
-
-        MouseDown mouseRay ->
-            case Physics.raycast mouseRay model.bodies of
-                Just ( Table, body, { point } ) ->
-                    let
-                        pointOnTable =
-                            Point3d.relativeTo (Physics.frame body) point
-                    in
-                    { model | dragTarget = Just ( pointOnTable, point ) }
-
-                _ ->
-                    model
-
-        MouseMove mouseRay ->
-            case model.dragTarget of
-                Just ( pointOnTable, dragPoint ) ->
-                    let
-                        plane =
-                            Plane3d.through dragPoint (Camera3d.viewDirection (camera model.cameraRotation model.turn))
-                    in
-                    { model
-                        | dragTarget =
-                            Just
-                                ( pointOnTable
-                                , Axis3d.intersectionWithPlane plane mouseRay
-                                    |> Maybe.withDefault dragPoint
-                                )
-                    }
-
-                Nothing ->
-                    model
-
-        MouseUp ->
-            { model | dragTarget = Nothing }
+            Timestep.advance simulateStep (Duration.milliseconds delta) model
 
         UserEnteredElevation angle ->
             { model | elevantionRaw = angle }
@@ -788,22 +708,6 @@ eyePoint =
     Point3d.meters 40 40 20
 
 
-lockMouseTo : Point3d Meters BodyCoordinates -> Id -> Maybe (Id -> List Constraint)
-lockMouseTo pointOnTable mouseId =
-    if mouseId == Mouse then
-        Just
-            (\tableId ->
-                if tableId == Table then
-                    [ Physics.Constraint.pointToPoint Point3d.origin pointOnTable ]
-
-                else
-                    []
-            )
-
-    else
-        Nothing
-
-
 view : Model -> Browser.Document Msg
 view model =
     { title = "Block Topple"
@@ -812,9 +716,6 @@ view model =
             [ Html.Attributes.style "position" "absolute"
             , Html.Attributes.style "left" "0"
             , Html.Attributes.style "top" "0"
-            , Html.Events.on "mousedown" (decodeMouseRay model.cameraRotation model.turn model.dimensions MouseDown)
-            , Html.Events.on "mousemove" (decodeMouseRay model.cameraRotation model.turn model.dimensions MouseMove)
-            , Html.Events.onMouseUp MouseUp
             ]
             [ Scene3d.sunny
                 { upDirection = Direction3d.positiveZ
@@ -826,15 +727,6 @@ view model =
                 , clipDepth = Length.meters 0.1
                 , entities =
                     let
-                        mouseEntity =
-                            case model.dragTarget of
-                                Just ( _, dragPoint ) ->
-                                    Scene3d.sphere (Scene3d.Material.matte Color.white)
-                                        (Sphere3d.atPoint dragPoint (Length.millimeters 20))
-
-                                Nothing ->
-                                    Scene3d.nothing
-
                         ballCenter =
                             listFindMap
                                 (\( id, body ) ->
@@ -927,7 +819,6 @@ view model =
                         Simulating ->
                             Scene3d.nothing
                     )
-                        -- :: mouseEntity
                         :: backgroundScenery
                         :: List.map
                             (bodyToEntity
@@ -1112,22 +1003,6 @@ bodyToEntity :
 bodyToEntity boxMesh boxMaterialRed boxMaterialBlue cylinderMesh ( id, body ) =
     Scene3d.placeIn (Physics.frame body) <|
         case id of
-            Mouse ->
-                -- Only used in simulation
-                Scene3d.nothing
-
-            Table ->
-                Scene3d.group <|
-                    List.map
-                        (Scene3d.blockWithShadow
-                            (Scene3d.Material.nonmetal
-                                { baseColor = Color.white
-                                , roughness = 0.25
-                                }
-                            )
-                        )
-                        tableBlocks
-
             Floor ->
                 Scene3d.quad (Scene3d.Material.matte Color.darkCharcoal)
                     (Point3d.meters -90 -90 0)

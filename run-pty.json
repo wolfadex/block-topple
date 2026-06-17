@@ -3,6 +3,9 @@
     "command": ["mise", "run", "dev-elm"]
   },
   {
+    "command": ["mise", "run", "dev-elm-server"]
+  },
+  {
     "command": ["mise", "run", "dev-review"]
   },
   {

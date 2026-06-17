@@ -19,6 +19,9 @@ run = "ladmera live"
 [tasks.dev-elm]
 run = "elm-watch hot"
 
+[tasks.dev-elm-server]
+run = "ELM_RUN_TLS_CERT= run --trust --http-port=8000 src/Server.elm"
+
 [tasks.dev-css]
 run = "css-in-elm watch public/styles.css src/Css.elm"
 
