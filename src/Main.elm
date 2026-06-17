@@ -33,13 +33,24 @@ import Point3d exposing (Point3d)
 import Quantity exposing (Quantity)
 import Rectangle2d
 import Scene3d exposing (Entity)
-import Scene3d.Material as Material
+import Scene3d.Material
 import Scene3d.Mesh
 import Sphere3d exposing (Sphere3d)
 import Task
 import Timestep exposing (Timestep)
 import TriangularMesh exposing (TriangularMesh)
 import Vector3d exposing (Vector3d)
+import WebGL.Texture
+
+
+main : Program () Model Msg
+main =
+    Browser.document
+        { init = init
+        , update = \msg model -> ( update msg model, Cmd.none )
+        , view = view
+        , subscriptions = subscriptions
+        }
 
 
 type Id
@@ -71,7 +82,11 @@ type alias Model =
     , elapsed : Duration
     , timestep : Timestep
     , cameraRotation : Float
+
+    --
     , boxMesh : Maybe CustomMesh
+    , boxMaterialRed : Maybe (Scene3d.Material.Textured BodyCoordinates)
+    , boxMaterialBlue : Maybe (Scene3d.Material.Textured BodyCoordinates)
     , cylinderMesh : Maybe CustomMesh
     }
 
@@ -90,31 +105,6 @@ type Turn
 type Stage
     = Aiming
     | Simulating
-
-
-type Msg
-    = Resize Int Int
-    | BoxMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
-    | CylinderMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
-    | Tick Float
-    | MouseDown (Axis3d Meters WorldCoordinates)
-    | MouseMove (Axis3d Meters WorldCoordinates)
-    | MouseUp
-    | UserEnteredElevation String
-    | UserEnteredRotation String
-    | UserEnteredForce String
-    | UserFiredBall
-    | UserRotatedCamera String
-
-
-main : Program () Model Msg
-main =
-    Browser.document
-        { init = init
-        , update = \msg model -> ( update msg model, Cmd.none )
-        , view = view
-        , subscriptions = subscriptions
-        }
 
 
 init : () -> ( Model, Cmd Msg )
@@ -136,7 +126,11 @@ init _ =
                 , maxSteps = 2
                 }
       , cameraRotation = 0
+
+      --
       , boxMesh = Nothing
+      , boxMaterialRed = Nothing
+      , boxMaterialBlue = Nothing
       , cylinderMesh = Nothing
       }
     , Cmd.batch
@@ -151,15 +145,21 @@ init _ =
 
 loadBox : Cmd Msg
 loadBox =
-    Http.get
-        { url = "/assets/box.obj"
-        , expect =
-            Obj.Decode.expectObj BoxMeshLoaded
-                Length.meters
-                (Obj.Decode.map Scene3d.Mesh.texturedFaces
-                    (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
-                )
-        }
+    Cmd.batch
+        [ Http.get
+            { url = "/assets/box.obj"
+            , expect =
+                Obj.Decode.expectObj BoxMeshLoaded
+                    Length.meters
+                    (Obj.Decode.map Scene3d.Mesh.texturedFaces
+                        (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
+                    )
+            }
+        , Scene3d.Material.load "/assets/box_red.png"
+            |> Task.attempt BoxRedTextureLoaded
+        , Scene3d.Material.load "/assets/box_blue.png"
+            |> Task.attempt BoxBlueTextureLoaded
+        ]
 
 
 loadCylinder : Cmd Msg
@@ -484,6 +484,23 @@ ballRadius =
     Length.centimeters 60
 
 
+type Msg
+    = Resize Int Int
+    | BoxMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
+    | BoxRedTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
+    | BoxBlueTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
+    | CylinderMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
+    | Tick Float
+    | MouseDown (Axis3d Meters WorldCoordinates)
+    | MouseMove (Axis3d Meters WorldCoordinates)
+    | MouseUp
+    | UserEnteredElevation String
+    | UserEnteredRotation String
+    | UserEnteredForce String
+    | UserFiredBall
+    | UserRotatedCamera String
+
+
 update : Msg -> Model -> Model
 update msg model =
     case msg of
@@ -495,6 +512,18 @@ update msg model =
 
         BoxMeshLoaded (Ok boxMesh) ->
             { model | boxMesh = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
+
+        BoxRedTextureLoaded (Err err) ->
+            Debug.todo (Debug.toString err)
+
+        BoxRedTextureLoaded (Ok texture) ->
+            { model | boxMaterialRed = Just (Scene3d.Material.texturedMatte texture) }
+
+        BoxBlueTextureLoaded (Err err) ->
+            Debug.todo (Debug.toString err)
+
+        BoxBlueTextureLoaded (Ok texture) ->
+            { model | boxMaterialBlue = Just (Scene3d.Material.texturedMatte texture) }
 
         CylinderMeshLoaded (Err err) ->
             Debug.todo (Debug.toString err)
@@ -800,7 +829,7 @@ view model =
                         mouseEntity =
                             case model.dragTarget of
                                 Just ( _, dragPoint ) ->
-                                    Scene3d.sphere (Material.matte Color.white)
+                                    Scene3d.sphere (Scene3d.Material.matte Color.white)
                                         (Sphere3d.atPoint dragPoint (Length.millimeters 20))
 
                                 Nothing ->
@@ -873,7 +902,7 @@ view model =
                             in
                             Scene3d.group
                                 [ Scene3d.cylinder
-                                    (Material.matte Color.green)
+                                    (Scene3d.Material.matte Color.green)
                                     (Cylinder3d.startingAt
                                         ballCenter
                                         arrowDirection
@@ -882,7 +911,7 @@ view model =
                                         }
                                     )
                                 , Scene3d.cone
-                                    (Material.matte Color.green)
+                                    (Scene3d.Material.matte Color.green)
                                     (Cone3d.startingAt
                                         (ballCenter
                                             |> Point3d.translateIn arrowDirection
@@ -903,6 +932,8 @@ view model =
                         :: List.map
                             (bodyToEntity
                                 model.boxMesh
+                                model.boxMaterialRed
+                                model.boxMaterialBlue
                                 model.cylinderMesh
                             )
                             model.bodies
@@ -980,19 +1011,19 @@ backgroundScenery : Scene3d.Entity WorldCoordinates
 backgroundScenery =
     Scene3d.group
         [ Scene3d.sphere
-            (Material.matte Color.darkGreen)
+            (Scene3d.Material.matte Color.darkGreen)
             (Sphere3d.atPoint
                 (Point3d.centimeters 0 -4000 -400)
                 (Length.centimeters 1000)
             )
         , Scene3d.sphere
-            (Material.matte Color.darkGreen)
+            (Scene3d.Material.matte Color.darkGreen)
             (Sphere3d.atPoint
                 (Point3d.centimeters 900 -4000 -400)
                 (Length.centimeters 800)
             )
         , Scene3d.sphere
-            (Material.matte Color.darkGreen)
+            (Scene3d.Material.matte Color.darkGreen)
             (Sphere3d.atPoint
                 (Point3d.centimeters 700 -3200 -400)
                 (Length.centimeters 600)
@@ -1000,7 +1031,7 @@ backgroundScenery =
 
         --
         , Scene3d.block
-            (Material.matte Color.darkGray)
+            (Scene3d.Material.matte Color.darkGray)
             (Block3d.centeredOn
                 (Frame3d.atPoint
                     (Point3d.centimeters 200 4700 0)
@@ -1013,7 +1044,7 @@ backgroundScenery =
                 )
             )
         , Scene3d.block
-            (Material.matte Color.darkGray)
+            (Scene3d.Material.matte Color.darkGray)
             (Block3d.centeredOn
                 (Frame3d.atPoint
                     (Point3d.centimeters 1000 4700 -150)
@@ -1026,7 +1057,7 @@ backgroundScenery =
                 )
             )
         , Scene3d.block
-            (Material.matte Color.darkGray)
+            (Scene3d.Material.matte Color.darkGray)
             (Block3d.centeredOn
                 (Frame3d.atPoint
                     (Point3d.centimeters 300 3200 -100)
@@ -1040,7 +1071,7 @@ backgroundScenery =
                 )
             )
         , Scene3d.block
-            (Material.matte Color.darkGray)
+            (Scene3d.Material.matte Color.darkGray)
             (Block3d.centeredOn
                 (Frame3d.atPoint
                     (Point3d.centimeters -800 4200 -100)
@@ -1071,8 +1102,14 @@ listFindMap pred list =
                     listFindMap pred rest
 
 
-bodyToEntity : Maybe CustomMesh -> Maybe CustomMesh -> ( Id, Body ) -> Entity WorldCoordinates
-bodyToEntity boxMesh cylinderMesh ( id, body ) =
+bodyToEntity :
+    Maybe CustomMesh
+    -> Maybe (Scene3d.Material.Textured BodyCoordinates)
+    -> Maybe (Scene3d.Material.Textured BodyCoordinates)
+    -> Maybe CustomMesh
+    -> ( Id, Body )
+    -> Entity WorldCoordinates
+bodyToEntity boxMesh boxMaterialRed boxMaterialBlue cylinderMesh ( id, body ) =
     Scene3d.placeIn (Physics.frame body) <|
         case id of
             Mouse ->
@@ -1083,7 +1120,7 @@ bodyToEntity boxMesh cylinderMesh ( id, body ) =
                 Scene3d.group <|
                     List.map
                         (Scene3d.blockWithShadow
-                            (Material.nonmetal
+                            (Scene3d.Material.nonmetal
                                 { baseColor = Color.white
                                 , roughness = 0.25
                                 }
@@ -1092,30 +1129,46 @@ bodyToEntity boxMesh cylinderMesh ( id, body ) =
                         tableBlocks
 
             Floor ->
-                Scene3d.quad (Material.matte Color.darkCharcoal)
+                Scene3d.quad (Scene3d.Material.matte Color.darkCharcoal)
                     (Point3d.meters -90 -90 0)
                     (Point3d.meters -90 90 0)
                     (Point3d.meters 90 90 0)
                     (Point3d.meters 90 -90 0)
 
             Block (Box s) c ->
+                let
+                    fallbackMaterial =
+                        Scene3d.Material.nonmetal
+                            { baseColor = c
+                            , roughness = 0.25
+                            }
+
+                    material =
+                        if Color.lightRed == c then
+                            case boxMaterialRed of
+                                Nothing ->
+                                    fallbackMaterial
+
+                                Just mat ->
+                                    mat
+
+                        else
+                            case boxMaterialBlue of
+                                Nothing ->
+                                    fallbackMaterial
+
+                                Just mat ->
+                                    mat
+                in
                 case boxMesh of
                     Nothing ->
                         Scene3d.blockWithShadow
-                            (Material.nonmetal
-                                { baseColor = c
-                                , roughness = 0.25
-                                }
-                            )
+                            fallbackMaterial
                             s
 
                     Just ( mesh, meshShadow ) ->
                         Scene3d.meshWithShadow
-                            (Material.nonmetal
-                                { baseColor = c
-                                , roughness = 0.25
-                                }
-                            )
+                            material
                             mesh
                             meshShadow
                             |> Scene3d.translateBy (Vector3d.from (Point3d.meters 0 0 0.5) (Block3d.centerPoint s))
@@ -1124,7 +1177,7 @@ bodyToEntity boxMesh cylinderMesh ( id, body ) =
                 case cylinderMesh of
                     Nothing ->
                         Scene3d.cylinderWithShadow
-                            (Material.nonmetal
+                            (Scene3d.Material.nonmetal
                                 { baseColor = c
                                 , roughness = 0.25
                                 }
@@ -1133,7 +1186,7 @@ bodyToEntity boxMesh cylinderMesh ( id, body ) =
 
                     Just ( mesh, meshShadow ) ->
                         Scene3d.meshWithShadow
-                            (Material.nonmetal
+                            (Scene3d.Material.nonmetal
                                 { baseColor = c
                                 , roughness = 0.25
                                 }
@@ -1144,7 +1197,7 @@ bodyToEntity boxMesh cylinderMesh ( id, body ) =
 
             Block (Cone s) c ->
                 Scene3d.coneWithShadow
-                    (Material.nonmetal
+                    (Scene3d.Material.nonmetal
                         { baseColor = c
                         , roughness = 0.25
                         }
@@ -1153,7 +1206,7 @@ bodyToEntity boxMesh cylinderMesh ( id, body ) =
 
             RedBall b c ->
                 Scene3d.sphereWithShadow
-                    (Material.nonmetal
+                    (Scene3d.Material.nonmetal
                         { baseColor = c
                         , roughness = 0.25
                         }
@@ -1162,7 +1215,7 @@ bodyToEntity boxMesh cylinderMesh ( id, body ) =
 
             BlueBall b c ->
                 Scene3d.sphereWithShadow
-                    (Material.nonmetal
+                    (Scene3d.Material.nonmetal
                         { baseColor = c
                         , roughness = 0.25
                         }
