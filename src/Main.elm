@@ -67,6 +67,7 @@ type alias Model =
     , stage : Stage
     , elapsed : Duration
     , timestep : Timestep
+    , cameraRotation : Float
     }
 
 
@@ -90,6 +91,7 @@ type Msg
     | UserEnteredRotation String
     | UserEnteredForce String
     | UserFiredBall
+    | UserRotatedCamera String
 
 
 main : Program () Model Msg
@@ -120,6 +122,7 @@ init _ =
                 { duration = Duration.seconds (1 / 120)
                 , maxSteps = 2
                 }
+      , cameraRotation = 0
       }
     , Task.perform
         (\{ viewport } -> Resize (round viewport.width) (round viewport.height))
@@ -161,7 +164,7 @@ tableOnFloor =
                         Block _ _ ->
                             body
                                 |> Physics.translateBy
-                                    (Vector3d.centimeters -1500 0 0)
+                                    (Vector3d.centimeters -1400 0 0)
 
                         _ ->
                             body
@@ -175,7 +178,7 @@ tableOnFloor =
                         Block _ _ ->
                             body
                                 |> Physics.translateBy
-                                    (Vector3d.centimeters 500 0 0)
+                                    (Vector3d.centimeters 600 0 0)
 
                         _ ->
                             body
@@ -409,7 +412,7 @@ initRedBall =
 
 redBallStart : Point3d Meters coordinates
 redBallStart =
-    Point3d.centimeters 900 130 50
+    Point3d.centimeters 1000 130 50
 
 
 initBlueBall : ( Id, Physics.Body )
@@ -428,7 +431,7 @@ initBlueBall =
 
 blueBallStart : Point3d Meters coordinates
 blueBallStart =
-    Point3d.centimeters -900 130 50
+    Point3d.centimeters -1000 130 50
 
 
 ballRadius : Length
@@ -478,7 +481,7 @@ update msg model =
                 Just ( pointOnTable, dragPoint ) ->
                     let
                         plane =
-                            Plane3d.through dragPoint (Camera3d.viewDirection (camera model.turn))
+                            Plane3d.through dragPoint (Camera3d.viewDirection (camera model.cameraRotation model.turn))
                     in
                     { model
                         | dragTarget =
@@ -593,6 +596,14 @@ update msg model =
                 _ ->
                     model
 
+        UserRotatedCamera cameraRotation ->
+            { model
+                | cameraRotation =
+                    cameraRotation
+                        |> String.toFloat
+                        |> Maybe.withDefault model.cameraRotation
+            }
+
 
 simulateStep : Model -> Model
 simulateStep model =
@@ -635,6 +646,13 @@ simulateStep model =
             , elevantionRaw = ""
             , rotationRaw = ""
             , forceRaw = ""
+            , cameraRotation =
+                case newModel.turn of
+                    Red ->
+                        90
+
+                    Blue ->
+                        0
             , bodies =
                 (case newModel.turn of
                     Red ->
@@ -665,27 +683,23 @@ simulateStep model =
         newModel
 
 
-camera : Turn -> Camera3d Meters WorldCoordinates
-camera turn =
+camera : Float -> Turn -> Camera3d Meters WorldCoordinates
+camera cameraRotation turn =
     Camera3d.lookAt
         { eyePoint =
-            case turn of
-                Red ->
-                    Point3d.meters 30 40 20
-
-                Blue ->
-                    Point3d.meters -30 40 20
-        , focalPoint =
-            case turn of
-                Red ->
-                    Point3d.meters -0.5 -0.5 0
-
-                Blue ->
-                    Point3d.meters 0.5 -0.5 0
+            eyePoint
+                |> Point3d.rotateAround Axis3d.z
+                    (Angle.degrees cameraRotation)
+        , focalPoint = Point3d.meters 0 0 3
         , upDirection = Direction3d.positiveZ
         , projection = Camera3d.Perspective
         , fov = Camera3d.angle (Angle.degrees 24)
         }
+
+
+eyePoint : Point3d Meters WorldCoordinates
+eyePoint =
+    Point3d.meters 40 40 20
 
 
 lockMouseTo : Point3d Meters BodyCoordinates -> Id -> Maybe (Id -> List Constraint)
@@ -712,15 +726,15 @@ view model =
             [ Html.Attributes.style "position" "absolute"
             , Html.Attributes.style "left" "0"
             , Html.Attributes.style "top" "0"
-            , Html.Events.on "mousedown" (decodeMouseRay model.turn model.dimensions MouseDown)
-            , Html.Events.on "mousemove" (decodeMouseRay model.turn model.dimensions MouseMove)
+            , Html.Events.on "mousedown" (decodeMouseRay model.cameraRotation model.turn model.dimensions MouseDown)
+            , Html.Events.on "mousemove" (decodeMouseRay model.cameraRotation model.turn model.dimensions MouseMove)
             , Html.Events.onMouseUp MouseUp
             ]
             [ Scene3d.sunny
                 { upDirection = Direction3d.positiveZ
                 , sunlightDirection = Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -60)
                 , shadows = True
-                , camera = camera model.turn
+                , camera = camera model.cameraRotation model.turn
                 , dimensions = model.dimensions
                 , background = Scene3d.transparentBackground
                 , clipDepth = Length.meters 0.1
@@ -796,9 +810,8 @@ view model =
                                 arrowLength =
                                     model.forceRaw
                                         |> String.toFloat
-                                        -- |> Maybe.map (\f -> f / 4)
+                                        |> Maybe.map (\f -> f * 8)
                                         |> Maybe.withDefault 100
-                                        |> max 100
                                         |> Length.centimeters
                             in
                             Scene3d.group
@@ -865,7 +878,7 @@ view model =
                 , Html.Attributes.type_ "number"
                 , Html.Attributes.min "0"
                 , Html.Attributes.step "1"
-                , Html.Attributes.max "100"
+                , Html.Attributes.max "80"
                 , Html.Attributes.value model.forceRaw
                 , Html.Events.onInput UserEnteredForce
                 ]
@@ -885,6 +898,17 @@ view model =
                 ]
                 [ Html.text "Fire!" ]
             ]
+        , Html.input
+            [ Html.Attributes.style "position" "fixed"
+            , Html.Attributes.style "bottom" "2rem"
+            , Html.Attributes.type_ "range"
+            , Html.Attributes.min "0"
+            , Html.Attributes.max "360"
+            , Html.Attributes.step "1"
+            , Html.Attributes.value (String.fromFloat model.cameraRotation)
+            , Html.Events.onInput UserRotatedCamera
+            ]
+            []
         ]
     }
 
@@ -991,15 +1015,16 @@ subscriptions model =
 
 
 decodeMouseRay :
-    Turn
+    Float
+    -> Turn
     -> ( Quantity Int Pixels, Quantity Int Pixels )
     -> (Axis3d Meters WorldCoordinates -> msg)
     -> Decoder msg
-decodeMouseRay turn ( width, height ) rayToMsg =
+decodeMouseRay cameraRotation turn ( width, height ) rayToMsg =
     Json.Decode.map2
         (\x y ->
             rayToMsg <|
-                Camera3d.ray (camera turn)
+                Camera3d.ray (camera cameraRotation turn)
                     (Rectangle2d.with
                         { x1 = Quantity.zero
                         , y1 = Quantity.toFloatQuantity height
