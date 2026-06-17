@@ -17,8 +17,10 @@ import Frame3d
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Http
 import Json.Decode exposing (Decoder)
 import Length exposing (Length, Meters)
+import Obj.Decode
 import Parameter1d
 import Physics exposing (Body, BodyCoordinates, WorldCoordinates, onEarth)
 import Physics.Constraint exposing (Constraint)
@@ -30,13 +32,14 @@ import Point2d
 import Point3d exposing (Point3d)
 import Quantity exposing (Quantity)
 import Rectangle2d
-import Scene3d exposing (Entity, backgroundColor)
+import Scene3d exposing (Entity)
 import Scene3d.Material as Material
+import Scene3d.Mesh
 import Sphere3d exposing (Sphere3d)
 import Task
 import Timestep exposing (Timestep)
-import TriangularMesh
-import Vector3d
+import TriangularMesh exposing (TriangularMesh)
+import Vector3d exposing (Vector3d)
 
 
 type Id
@@ -68,6 +71,11 @@ type alias Model =
     , elapsed : Duration
     , timestep : Timestep
     , cameraRotation : Float
+    , boxMesh :
+        Maybe
+            ( Scene3d.Mesh.Textured BodyCoordinates
+            , Scene3d.Mesh.Shadow BodyCoordinates
+            )
     }
 
 
@@ -82,8 +90,9 @@ type Stage
 
 
 type Msg
-    = Tick Float
-    | Resize Int Int
+    = Resize Int Int
+    | BoxMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
+    | Tick Float
     | MouseDown (Axis3d Meters WorldCoordinates)
     | MouseMove (Axis3d Meters WorldCoordinates)
     | MouseUp
@@ -123,11 +132,28 @@ init _ =
                 , maxSteps = 2
                 }
       , cameraRotation = 0
+      , boxMesh = Nothing
       }
-    , Task.perform
-        (\{ viewport } -> Resize (round viewport.width) (round viewport.height))
-        Browser.Dom.getViewport
+    , Cmd.batch
+        [ Task.perform
+            (\{ viewport } -> Resize (round viewport.width) (round viewport.height))
+            Browser.Dom.getViewport
+        , loadBox
+        ]
     )
+
+
+loadBox : Cmd Msg
+loadBox =
+    Http.get
+        { url = "/assets/box.obj"
+        , expect =
+            Obj.Decode.expectObj BoxMeshLoaded
+                Length.meters
+                (Obj.Decode.map Scene3d.Mesh.texturedFaces
+                    (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
+                )
+        }
 
 
 tableBlocks : List (Block3d Meters BodyCoordinates)
@@ -442,6 +468,15 @@ ballRadius =
 update : Msg -> Model -> Model
 update msg model =
     case msg of
+        Resize width height ->
+            { model | dimensions = ( Pixels.int width, Pixels.int height ) }
+
+        BoxMeshLoaded (Err err) ->
+            Debug.todo (Debug.toString err)
+
+        BoxMeshLoaded (Ok boxMesh) ->
+            { model | boxMesh = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
+
         Tick delta ->
             case model.dragTarget of
                 Just ( pointOnTable, dragPoint ) ->
@@ -497,9 +532,6 @@ update msg model =
 
         MouseUp ->
             { model | dragTarget = Nothing }
-
-        Resize width height ->
-            { model | dimensions = ( Pixels.int width, Pixels.int height ) }
 
         UserEnteredElevation angle ->
             { model | elevantionRaw = angle }
@@ -736,7 +768,7 @@ view model =
                 , shadows = True
                 , camera = camera model.cameraRotation model.turn
                 , dimensions = model.dimensions
-                , background = Scene3d.transparentBackground
+                , background = Scene3d.backgroundColor (Color.rgb255 100 149 237)
                 , clipDepth = Length.meters 0.1
                 , entities =
                     let
@@ -843,7 +875,7 @@ view model =
                     )
                         -- :: mouseEntity
                         :: backgroundScenery
-                        :: List.map bodyEntity model.bodies
+                        :: List.map (bodyToEntity model.boxMesh) model.bodies
                 }
             ]
         , Html.form
@@ -914,6 +946,7 @@ view model =
     }
 
 
+backgroundScenery : Scene3d.Entity WorldCoordinates
 backgroundScenery =
     Scene3d.group
         [ Scene3d.sphere
@@ -1008,8 +1041,14 @@ listFindMap pred list =
                     listFindMap pred rest
 
 
-bodyEntity : ( Id, Body ) -> Entity WorldCoordinates
-bodyEntity ( id, body ) =
+bodyToEntity :
+    Maybe
+        ( Scene3d.Mesh.Textured BodyCoordinates
+        , Scene3d.Mesh.Shadow BodyCoordinates
+        )
+    -> ( Id, Body )
+    -> Entity WorldCoordinates
+bodyToEntity boxMesh ( id, body ) =
     Scene3d.placeIn (Physics.frame body) <|
         case id of
             Mouse ->
@@ -1036,13 +1075,26 @@ bodyEntity ( id, body ) =
                     (Point3d.meters 90 -90 0)
 
             Block (Box s) c ->
-                Scene3d.blockWithShadow
-                    (Material.nonmetal
-                        { baseColor = c
-                        , roughness = 0.25
-                        }
-                    )
-                    s
+                case boxMesh of
+                    Nothing ->
+                        Scene3d.blockWithShadow
+                            (Material.nonmetal
+                                { baseColor = c
+                                , roughness = 0.25
+                                }
+                            )
+                            s
+
+                    Just ( mesh, meshShadow ) ->
+                        Scene3d.meshWithShadow
+                            (Material.nonmetal
+                                { baseColor = c
+                                , roughness = 0.25
+                                }
+                            )
+                            mesh
+                            meshShadow
+                            |> Scene3d.translateBy (Vector3d.from (Point3d.meters 0 0 0.5) (Block3d.centerPoint s))
 
             Block (Cylinder s) c ->
                 Scene3d.cylinderWithShadow
