@@ -71,12 +71,15 @@ type alias Model =
     , elapsed : Duration
     , timestep : Timestep
     , cameraRotation : Float
-    , boxMesh :
-        Maybe
-            ( Scene3d.Mesh.Textured BodyCoordinates
-            , Scene3d.Mesh.Shadow BodyCoordinates
-            )
+    , boxMesh : Maybe CustomMesh
+    , cylinderMesh : Maybe CustomMesh
     }
+
+
+type alias CustomMesh =
+    ( Scene3d.Mesh.Textured BodyCoordinates
+    , Scene3d.Mesh.Shadow BodyCoordinates
+    )
 
 
 type Turn
@@ -92,6 +95,7 @@ type Stage
 type Msg
     = Resize Int Int
     | BoxMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
+    | CylinderMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
     | Tick Float
     | MouseDown (Axis3d Meters WorldCoordinates)
     | MouseMove (Axis3d Meters WorldCoordinates)
@@ -133,12 +137,14 @@ init _ =
                 }
       , cameraRotation = 0
       , boxMesh = Nothing
+      , cylinderMesh = Nothing
       }
     , Cmd.batch
         [ Task.perform
             (\{ viewport } -> Resize (round viewport.width) (round viewport.height))
             Browser.Dom.getViewport
         , loadBox
+        , loadCylinder
         ]
     )
 
@@ -149,6 +155,19 @@ loadBox =
         { url = "/assets/box.obj"
         , expect =
             Obj.Decode.expectObj BoxMeshLoaded
+                Length.meters
+                (Obj.Decode.map Scene3d.Mesh.texturedFaces
+                    (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
+                )
+        }
+
+
+loadCylinder : Cmd Msg
+loadCylinder =
+    Http.get
+        { url = "/assets/cylinder.obj"
+        , expect =
+            Obj.Decode.expectObj CylinderMeshLoaded
                 Length.meters
                 (Obj.Decode.map Scene3d.Mesh.texturedFaces
                     (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
@@ -476,6 +495,12 @@ update msg model =
 
         BoxMeshLoaded (Ok boxMesh) ->
             { model | boxMesh = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
+
+        CylinderMeshLoaded (Err err) ->
+            Debug.todo (Debug.toString err)
+
+        CylinderMeshLoaded (Ok cylinderMesh) ->
+            { model | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh ) }
 
         Tick delta ->
             case model.dragTarget of
@@ -875,7 +900,12 @@ view model =
                     )
                         -- :: mouseEntity
                         :: backgroundScenery
-                        :: List.map (bodyToEntity model.boxMesh) model.bodies
+                        :: List.map
+                            (bodyToEntity
+                                model.boxMesh
+                                model.cylinderMesh
+                            )
+                            model.bodies
                 }
             ]
         , Html.form
@@ -1041,14 +1071,8 @@ listFindMap pred list =
                     listFindMap pred rest
 
 
-bodyToEntity :
-    Maybe
-        ( Scene3d.Mesh.Textured BodyCoordinates
-        , Scene3d.Mesh.Shadow BodyCoordinates
-        )
-    -> ( Id, Body )
-    -> Entity WorldCoordinates
-bodyToEntity boxMesh ( id, body ) =
+bodyToEntity : Maybe CustomMesh -> Maybe CustomMesh -> ( Id, Body ) -> Entity WorldCoordinates
+bodyToEntity boxMesh cylinderMesh ( id, body ) =
     Scene3d.placeIn (Physics.frame body) <|
         case id of
             Mouse ->
@@ -1097,13 +1121,26 @@ bodyToEntity boxMesh ( id, body ) =
                             |> Scene3d.translateBy (Vector3d.from (Point3d.meters 0 0 0.5) (Block3d.centerPoint s))
 
             Block (Cylinder s) c ->
-                Scene3d.cylinderWithShadow
-                    (Material.nonmetal
-                        { baseColor = c
-                        , roughness = 0.25
-                        }
-                    )
-                    s
+                case cylinderMesh of
+                    Nothing ->
+                        Scene3d.cylinderWithShadow
+                            (Material.nonmetal
+                                { baseColor = c
+                                , roughness = 0.25
+                                }
+                            )
+                            s
+
+                    Just ( mesh, meshShadow ) ->
+                        Scene3d.meshWithShadow
+                            (Material.nonmetal
+                                { baseColor = c
+                                , roughness = 0.25
+                                }
+                            )
+                            mesh
+                            meshShadow
+                            |> Scene3d.translateBy (Vector3d.from (Point3d.meters 0 0 0.5) (Cylinder3d.centerPoint s))
 
             Block (Cone s) c ->
                 Scene3d.coneWithShadow
