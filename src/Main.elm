@@ -841,7 +841,8 @@ view model =
                         Simulating ->
                             Scene3d.nothing
                     )
-                        :: mouseEntity
+                        -- :: mouseEntity
+                        :: backgroundScenery
                         :: List.map bodyEntity model.bodies
                 }
             ]
@@ -911,6 +912,85 @@ view model =
             []
         ]
     }
+
+
+backgroundScenery =
+    Scene3d.group
+        [ Scene3d.sphere
+            (Material.matte Color.darkGreen)
+            (Sphere3d.atPoint
+                (Point3d.centimeters 0 -4000 -400)
+                (Length.centimeters 1000)
+            )
+        , Scene3d.sphere
+            (Material.matte Color.darkGreen)
+            (Sphere3d.atPoint
+                (Point3d.centimeters 900 -4000 -400)
+                (Length.centimeters 800)
+            )
+        , Scene3d.sphere
+            (Material.matte Color.darkGreen)
+            (Sphere3d.atPoint
+                (Point3d.centimeters 700 -3200 -400)
+                (Length.centimeters 600)
+            )
+
+        --
+        , Scene3d.block
+            (Material.matte Color.darkGray)
+            (Block3d.centeredOn
+                (Frame3d.atPoint
+                    (Point3d.centimeters 200 4700 0)
+                    |> Frame3d.rotateAroundOwn Frame3d.xAxis (Angle.degrees 45)
+                    |> Frame3d.rotateAroundOwn Frame3d.yAxis (Angle.degrees 45)
+                )
+                ( Length.centimeters 1200
+                , Length.centimeters 1200
+                , Length.centimeters 1200
+                )
+            )
+        , Scene3d.block
+            (Material.matte Color.darkGray)
+            (Block3d.centeredOn
+                (Frame3d.atPoint
+                    (Point3d.centimeters 1000 4700 -150)
+                    |> Frame3d.rotateAroundOwn Frame3d.xAxis (Angle.degrees 40)
+                    |> Frame3d.rotateAroundOwn Frame3d.yAxis (Angle.degrees 47)
+                )
+                ( Length.centimeters 700
+                , Length.centimeters 700
+                , Length.centimeters 700
+                )
+            )
+        , Scene3d.block
+            (Material.matte Color.darkGray)
+            (Block3d.centeredOn
+                (Frame3d.atPoint
+                    (Point3d.centimeters 300 3200 -100)
+                    |> Frame3d.rotateAroundOwn Frame3d.xAxis (Angle.degrees 49)
+                    |> Frame3d.rotateAroundOwn Frame3d.yAxis (Angle.degrees 38)
+                    |> Frame3d.rotateAroundOwn Frame3d.zAxis (Angle.degrees -38)
+                )
+                ( Length.centimeters 700
+                , Length.centimeters 700
+                , Length.centimeters 700
+                )
+            )
+        , Scene3d.block
+            (Material.matte Color.darkGray)
+            (Block3d.centeredOn
+                (Frame3d.atPoint
+                    (Point3d.centimeters -800 4200 -100)
+                    |> Frame3d.rotateAroundOwn Frame3d.xAxis (Angle.degrees 49)
+                    |> Frame3d.rotateAroundOwn Frame3d.yAxis (Angle.degrees -38)
+                    |> Frame3d.rotateAroundOwn Frame3d.zAxis (Angle.degrees -38)
+                )
+                ( Length.centimeters 700
+                , Length.centimeters 700
+                , Length.centimeters 700
+                )
+            )
+        ]
 
 
 listFindMap : (a -> Maybe b) -> List a -> Maybe b
