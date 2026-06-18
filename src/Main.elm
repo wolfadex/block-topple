@@ -135,6 +135,10 @@ init _ =
             Browser.Dom.getViewport
         , loadBox
         , loadCylinder
+        , Http.get
+            { url = "http://localhost:8000"
+            , expect = Http.expectString ServerWorks
+            }
         ]
     )
 
@@ -472,6 +476,7 @@ type Msg
     | UserEnteredForce String
     | UserFiredBall
     | UserRotatedCamera String
+    | ServerWorks (Result Http.Error String)
 
 
 update : Msg -> Model -> Model
@@ -504,6 +509,15 @@ update msg model =
         CylinderMeshLoaded (Ok cylinderMesh) ->
             { model | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh ) }
 
+        --
+        ServerWorks res ->
+            let
+                _ =
+                    Debug.log "from server" res
+            in
+            model
+
+        --
         Tick delta ->
             Timestep.advance simulateStep (Duration.milliseconds delta) model
 
