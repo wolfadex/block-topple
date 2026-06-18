@@ -62,22 +62,8 @@ app =
 init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
     ( { key = key
-      , bodies = tableOnFloor
-      , prevBodies = tableOnFloor
-      , contacts = Physics.emptyContacts
+      , page = Waiting ""
       , dimensions = ( Pixels.int 0, Pixels.int 0 )
-      , elevantionRaw = ""
-      , rotationRaw = ""
-      , forceRaw = ""
-      , turn = Red
-      , stage = Aiming
-      , elapsed = Duration.seconds 0
-      , timestep =
-            Timestep.init
-                { duration = Duration.seconds (1 / 120)
-                , maxSteps = 2
-                }
-      , cameraRotation = 0
 
       --
       , boxMesh = Nothing
@@ -127,296 +113,25 @@ loadCylinder =
         }
 
 
-tableOnFloor : List ( Id, Body )
-tableOnFloor =
-    List.concat
-        [ [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
-          , initRedBall
-          ]
-        , initBlockStack Color.lightBlue
-            |> List.map
-                (\( id, body ) ->
-                    ( id
-                    , case id of
-                        Block _ _ ->
-                            body
-                                |> Physics.translateBy
-                                    (Vector3d.centimeters -1400 0 0)
+subscriptions : FrontendModel -> Sub FrontendMsg
+subscriptions model =
+    Sub.batch
+        [ Browser.Events.onResize Resize
+        , case model.page of
+            Waiting _ ->
+                Sub.none
 
-                        _ ->
-                            body
-                    )
-                )
-        , initBlockStack Color.lightRed
-            |> List.map
-                (\( id, body ) ->
-                    ( id
-                    , case id of
-                        Block _ _ ->
-                            body
-                                |> Physics.translateBy
-                                    (Vector3d.centimeters 600 0 0)
+            InGame gameModel ->
+                case gameModel.stage of
+                    Aiming ->
+                        Sub.none
 
-                        _ ->
-                            body
-                    )
-                )
+                    Simulating ->
+                        Browser.Events.onAnimationFrameDelta (Tick >> GameMessage)
         ]
 
 
-initBlockStack : Color -> List ( Id, Physics.Body )
-initBlockStack color =
-    List.concat
-        [ initBlockRow 0 -300 50 9 color
-        , initBlockRow 0 -150 150 6 color
-        , [ initBox
-                (Point3d.centimeters 0 -100 250)
-                color
-          , initBox
-                (Point3d.centimeters 0 100 250)
-                color
-          , initBox
-                (Point3d.centimeters 0 300 250)
-                color
-          ]
-        , [ initBox
-                (Point3d.centimeters 100 500 50)
-                color
-          , initBox
-                (Point3d.centimeters 200 500 50)
-                color
-          , initBox
-                (Point3d.centimeters 300 500 50)
-                color
-          , initBox
-                (Point3d.centimeters 400 500 50)
-                color
-          , initBox
-                (Point3d.centimeters 500 500 50)
-                color
-          , initBox
-                (Point3d.centimeters 600 500 50)
-                color
-          , initBox
-                (Point3d.centimeters 700 500 50)
-                color
-
-          --
-          , initBox
-                (Point3d.centimeters 150 500 150)
-                color
-          , initBox
-                (Point3d.centimeters 250 500 150)
-                color
-          , initBox
-                (Point3d.centimeters 350 500 150)
-                color
-          , initBox
-                (Point3d.centimeters 450 500 150)
-                color
-          , initBox
-                (Point3d.centimeters 550 500 150)
-                color
-          , initBox
-                (Point3d.centimeters 650 500 150)
-                color
-
-          --
-          , initBox
-                (Point3d.centimeters 200 500 250)
-                color
-          , initBox
-                (Point3d.centimeters 400 500 250)
-                color
-          , initBox
-                (Point3d.centimeters 600 500 250)
-                color
-          ]
-        , initBlockRow 800 -300 50 9 color
-        , initBlockRow 800 -150 150 6 color
-        , [ initBox
-                (Point3d.centimeters 800 -100 250)
-                color
-          , initBox
-                (Point3d.centimeters 800 100 250)
-                color
-          , initBox
-                (Point3d.centimeters 800 300 250)
-                color
-          ]
-        , [ initBox
-                (Point3d.centimeters 100 -300 50)
-                color
-          , initBox
-                (Point3d.centimeters 200 -300 50)
-                color
-          , initBox
-                (Point3d.centimeters 300 -300 50)
-                color
-          , initBox
-                (Point3d.centimeters 400 -300 50)
-                color
-          , initBox
-                (Point3d.centimeters 500 -300 50)
-                color
-          , initBox
-                (Point3d.centimeters 600 -300 50)
-                color
-          , initBox
-                (Point3d.centimeters 700 -300 50)
-                color
-
-          --
-          , initBox
-                (Point3d.centimeters 150 -300 150)
-                color
-          , initBox
-                (Point3d.centimeters 250 -300 150)
-                color
-          , initBox
-                (Point3d.centimeters 350 -300 150)
-                color
-          , initBox
-                (Point3d.centimeters 450 -300 150)
-                color
-          , initBox
-                (Point3d.centimeters 550 -300 150)
-                color
-          , initBox
-                (Point3d.centimeters 650 -300 150)
-                color
-
-          --
-          , initBox
-                (Point3d.centimeters 200 -300 250)
-                color
-          , initBox
-                (Point3d.centimeters 400 -300 250)
-                color
-          , initBox
-                (Point3d.centimeters 600 -300 250)
-                color
-          ]
-        , initTower 0 500 color
-        , initTower 800 500 color
-        , initTower 0 -300 color
-        , initTower 800 -300 color
-        ]
-
-
-initTower : Float -> Float -> Color -> List ( Id, Physics.Body )
-initTower xOffset yOffset color =
-    [ initCylinder
-        (Point3d.centimeters xOffset yOffset 100)
-        color
-    , initCylinder
-        (Point3d.centimeters xOffset yOffset 200)
-        color
-    , let
-        cone =
-            Cone3d.startingAt
-                (Point3d.centimeters xOffset yOffset 300)
-                Direction3d.positiveZ
-                { radius = Length.centimeters 60
-                , length = Length.centimeters 80
-                }
-      in
-      ( Block (Cone cone) Color.gray
-      , physicsCone cone
-            Physics.Material.wood
-      )
-    ]
-
-
-initBlockRow : Float -> Float -> Float -> Int -> Color -> List ( Id, Physics.Body )
-initBlockRow xOffset yStart zOffset count color =
-    List.range 0 (count - 1)
-        |> List.map
-            (\index ->
-                initBox
-                    (Point3d.centimeters xOffset (yStart + toFloat index * 100) zOffset)
-                    color
-            )
-
-
-initBox : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
-initBox center color =
-    let
-        block =
-            Block3d.centeredOn
-                (Frame3d.atPoint center)
-                ( Length.centimeters 100
-                , Length.centimeters 100
-                , Length.centimeters 100
-                )
-    in
-    ( Block (Box block) color
-    , Physics.block block
-        Physics.Material.wood
-    )
-
-
-initCylinder : Point3d Meters BodyCoordinates -> Color -> ( Id, Physics.Body )
-initCylinder center color =
-    let
-        cylinder =
-            Cylinder3d.startingAt
-                center
-                Direction3d.positiveZ
-                { radius = Length.centimeters 50
-                , length = Length.centimeters 100
-                }
-    in
-    ( Block (Cylinder cylinder) color
-    , Physics.cylinder cylinder
-        Physics.Material.wood
-    )
-
-
-initRedBall : ( Id, Physics.Body )
-initRedBall =
-    let
-        ball =
-            Sphere3d.atPoint
-                redBallStart
-                ballRadius
-    in
-    ( RedBall ball Color.lightRed
-    , Physics.sphere ball
-        Physics.Material.steel
-    )
-
-
-redBallStart : Point3d Meters coordinates
-redBallStart =
-    Point3d.centimeters 1000 130 50
-
-
-initBlueBall : ( Id, Physics.Body )
-initBlueBall =
-    let
-        ball =
-            Sphere3d.atPoint
-                blueBallStart
-                ballRadius
-    in
-    ( BlueBall ball Color.lightBlue
-    , Physics.sphere ball
-        Physics.Material.steel
-    )
-
-
-blueBallStart : Point3d Meters coordinates
-blueBallStart =
-    Point3d.centimeters -1000 130 50
-
-
-ballRadius : Length
-ballRadius =
-    Length.centimeters 60
-
-
-noCmd : FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
+noCmd : model -> ( model, Cmd FrontendMsg )
 noCmd model =
     ( model, Cmd.none )
 
@@ -471,6 +186,19 @@ update msg model =
             { model | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh ) }
                 |> noCmd
 
+        GameMessage gameMsg ->
+            case model.page of
+                Waiting _ ->
+                    ( model, Cmd.none )
+
+                InGame gameModel ->
+                    updateGame gameMsg gameModel
+                        |> Tuple.mapFirst (\gm -> { model | page = InGame gm })
+
+
+updateGame : GameMsg -> GameFrontend -> ( GameFrontend, Cmd FrontendMsg )
+updateGame msg model =
+    case msg of
         Tick delta ->
             Timestep.advance simulateStep (Duration.milliseconds delta) model
                 |> noCmd
@@ -488,7 +216,7 @@ update msg model =
                 |> noCmd
 
         UserFiredBall ->
-            noCmd <|
+            if model.myColor == model.turn then
                 case
                     ( String.toFloat model.elevantionRaw
                     , String.toFloat model.rotationRaw
@@ -496,83 +224,15 @@ update msg model =
                     )
                 of
                     ( Just elevationF, Just rotationF, Just forceF ) ->
-                        let
-                            impulse =
-                                Vector3d.withLength
-                                    (Quantity.times (Duration.seconds 0.005)
-                                        (Force.meganewtons forceF)
-                                    )
-                                    ((case model.turn of
-                                        Red ->
-                                            Direction3d.negativeX
-
-                                        Blue ->
-                                            Direction3d.positiveX
-                                     )
-                                        |> Direction3d.rotateAround
-                                            (case model.turn of
-                                                Red ->
-                                                    Direction3d.positiveY
-
-                                                Blue ->
-                                                    Direction3d.negativeY
-                                            )
-                                            (Angle.degrees elevationF)
-                                        |> Direction3d.rotateAround
-                                            Direction3d.negativeZ
-                                            (model.rotationRaw
-                                                |> String.toFloat
-                                                |> Maybe.withDefault 0
-                                                |> Angle.degrees
-                                            )
-                                    )
-                        in
-                        { model
-                            | stage = Simulating
-                            , bodies =
-                                List.map
-                                    (\( id, body ) ->
-                                        ( id
-                                        , case id of
-                                            RedBall _ _ ->
-                                                case model.turn of
-                                                    Red ->
-                                                        Physics.applyImpulse
-                                                            impulse
-                                                            (Physics.centerOfMass body
-                                                                |> Maybe.withDefault Point3d.origin
-                                                                |> Point3d.translateBy
-                                                                    (Vector3d.scaleTo ballRadius impulse)
-                                                            )
-                                                            body
-
-                                                    Blue ->
-                                                        body
-
-                                            BlueBall _ _ ->
-                                                case model.turn of
-                                                    Blue ->
-                                                        Physics.applyImpulse
-                                                            impulse
-                                                            (Physics.centerOfMass body
-                                                                |> Maybe.withDefault Point3d.origin
-                                                                |> Point3d.translateBy
-                                                                    (Vector3d.scaleTo ballRadius impulse)
-                                                            )
-                                                            body
-
-                                                    Red ->
-                                                        body
-
-                                            _ ->
-                                                body
-                                        )
-                                    )
-                                    model.bodies
-                        }
+                        ( fireBall elevationF rotationF forceF model
+                        , Lamdera.sendToBackend (Fire elevationF rotationF forceF)
+                        )
 
                     _ ->
-                        model
+                        ( model, Cmd.none )
+
+            else
+                ( model, Cmd.none )
 
         UserRotatedCamera cameraRotation ->
             { model
@@ -584,7 +244,81 @@ update msg model =
                 |> noCmd
 
 
-simulateStep : FrontendModel -> FrontendModel
+fireBall : Float -> Float -> Float -> GameFrontend -> GameFrontend
+fireBall elevationF rotationF forceF model =
+    let
+        impulse =
+            Vector3d.withLength
+                (Quantity.times (Duration.seconds 0.005)
+                    (Force.meganewtons forceF)
+                )
+                ((case model.turn of
+                    Red ->
+                        Direction3d.negativeX
+
+                    Blue ->
+                        Direction3d.positiveX
+                 )
+                    |> Direction3d.rotateAround
+                        (case model.turn of
+                            Red ->
+                                Direction3d.positiveY
+
+                            Blue ->
+                                Direction3d.negativeY
+                        )
+                        (Angle.degrees elevationF)
+                    |> Direction3d.rotateAround
+                        Direction3d.negativeZ
+                        (Angle.degrees rotationF)
+                )
+    in
+    { model
+        | stage = Simulating
+        , bodies =
+            List.map
+                (\( id, body ) ->
+                    ( id
+                    , case id of
+                        RedBall _ _ ->
+                            case model.turn of
+                                Red ->
+                                    Physics.applyImpulse
+                                        impulse
+                                        (Physics.centerOfMass body
+                                            |> Maybe.withDefault Point3d.origin
+                                            |> Point3d.translateBy
+                                                (Vector3d.scaleTo ballRadius impulse)
+                                        )
+                                        body
+
+                                Blue ->
+                                    body
+
+                        BlueBall _ _ ->
+                            case model.turn of
+                                Blue ->
+                                    Physics.applyImpulse
+                                        impulse
+                                        (Physics.centerOfMass body
+                                            |> Maybe.withDefault Point3d.origin
+                                            |> Point3d.translateBy
+                                                (Vector3d.scaleTo ballRadius impulse)
+                                        )
+                                        body
+
+                                Red ->
+                                    body
+
+                        _ ->
+                            body
+                    )
+                )
+                model.bodies
+    }
+
+
+simulateStep : GameFrontend -> GameFrontend
 simulateStep model =
     let
         ( simulated, newContacts ) =
@@ -622,9 +356,6 @@ simulateStep model =
                     Blue ->
                         Red
             , elapsed = Duration.seconds 0
-            , elevantionRaw = ""
-            , rotationRaw = ""
-            , forceRaw = ""
             , cameraRotation =
                 case newModel.turn of
                     Red ->
@@ -662,8 +393,8 @@ simulateStep model =
         newModel
 
 
-camera : Float -> Turn -> Camera3d Meters WorldCoordinates
-camera cameraRotation turn =
+camera : Float -> Camera3d Meters WorldCoordinates
+camera cameraRotation =
     Camera3d.lookAt
         { eyePoint =
             eyePoint
@@ -684,197 +415,318 @@ eyePoint =
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
     case msg of
-        NoOpToFrontend ->
-            ( model, Cmd.none )
+        GameStarted myColor ->
+            ( { model
+                | page =
+                    InGame
+                        { myColor = myColor
+                        , bodies = initBodies
+                        , prevBodies = initBodies
+                        , contacts = Physics.emptyContacts
+                        , elevantionRaw = ""
+                        , rotationRaw = ""
+                        , forceRaw = ""
+                        , turn = Red
+                        , stage = Aiming
+                        , elapsed = Duration.seconds 0
+                        , timestep = initTimestep
+                        , cameraRotation =
+                            case myColor of
+                                Red ->
+                                    0
+
+                                Blue ->
+                                    90
+                        }
+              }
+            , Cmd.none
+            )
+
+        OtherPlayerLeft ->
+            ( { model
+                | page = Waiting "Other player left"
+              }
+            , Cmd.none
+            )
+
+        GameRejoined game ->
+            ( { model
+                | page =
+                    InGame
+                        { myColor = game.yourColor
+                        , bodies = game.bodies
+                        , prevBodies = game.bodies
+                        , contacts = game.contacts
+                        , elevantionRaw = ""
+                        , rotationRaw = ""
+                        , forceRaw = ""
+                        , turn = game.turn
+                        , stage = game.stage
+                        , elapsed = game.elapsed
+                        , timestep = game.timestep
+                        , cameraRotation =
+                            case game.yourColor of
+                                Red ->
+                                    0
+
+                                Blue ->
+                                    90
+                        }
+              }
+            , Cmd.none
+            )
+
+        TurnChange changes ->
+            case model.page of
+                Waiting _ ->
+                    Debug.todo ""
+
+                InGame game ->
+                    ( { model
+                        | page =
+                            InGame
+                                { game
+                                    | bodies = changes.bodies
+                                    , prevBodies = changes.bodies
+                                    , contacts = changes.contacts
+                                    , turn = Debug.log "next turn?" changes.turn
+                                    , stage = Aiming
+                                    , elapsed = Duration.seconds 0
+                                    , timestep = initTimestep
+                                }
+                      }
+                    , Cmd.none
+                    )
+
+        OtherPlayerFired elevationF rotationF forceF ->
+            case model.page of
+                Waiting _ ->
+                    Debug.todo ""
+
+                InGame game ->
+                    ( { model | page = InGame (fireBall elevationF rotationF forceF game) }
+                    , Cmd.none
+                    )
+
+
+initTimestep : Timestep
+initTimestep =
+    Timestep.init
+        { duration = Duration.seconds (1 / 120)
+        , maxSteps = 2
+        }
 
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
     { title = "Block Topple"
     , body =
-        [ Html.div
-            [ Html.Attributes.style "position" "absolute"
-            , Html.Attributes.style "left" "0"
-            , Html.Attributes.style "top" "0"
-            ]
-            [ Scene3d.sunny
-                { upDirection = Direction3d.positiveZ
-                , sunlightDirection = Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -60)
-                , shadows = True
-                , camera = camera model.cameraRotation model.turn
-                , dimensions = model.dimensions
-                , background = Scene3d.backgroundColor (Color.rgb255 100 149 237)
-                , clipDepth = Length.meters 0.1
-                , entities =
-                    let
-                        ballCenter =
-                            listFindMap
-                                (\( id, body ) ->
-                                    case id of
-                                        RedBall _ _ ->
-                                            case model.turn of
-                                                Red ->
-                                                    Physics.centerOfMass body
+        case model.page of
+            Waiting additionalMessage ->
+                [ Html.div
+                    [ Html.Attributes.style "position" "fixed"
+                    , Html.Attributes.style "left" "50%"
+                    , Html.Attributes.style "top" "50%"
+                    , Html.Attributes.style "transform" "translate(-50%, -50%)"
+                    ]
+                    [ Html.p [] [ Html.text additionalMessage ]
+                    , Html.p [] [ Html.text "waiting for another player ..." ]
+                    ]
+                ]
 
-                                                Blue ->
-                                                    Nothing
+            InGame gameModel ->
+                List.map (Html.map GameMessage) <|
+                    [ Html.div
+                        [ Html.Attributes.style "position" "absolute"
+                        , Html.Attributes.style "left" "0"
+                        , Html.Attributes.style "top" "0"
+                        ]
+                        [ Scene3d.sunny
+                            { upDirection = Direction3d.positiveZ
+                            , sunlightDirection = Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -60)
+                            , shadows = True
+                            , camera = camera gameModel.cameraRotation
+                            , dimensions = model.dimensions
+                            , background = Scene3d.backgroundColor (Color.rgb255 100 149 237)
+                            , clipDepth = Length.meters 0.1
+                            , entities =
+                                let
+                                    ballCenter =
+                                        listFindMap
+                                            (\( id, body ) ->
+                                                case id of
+                                                    RedBall _ _ ->
+                                                        case gameModel.turn of
+                                                            Red ->
+                                                                Physics.centerOfMass body
 
-                                        BlueBall _ _ ->
-                                            case model.turn of
-                                                Blue ->
-                                                    Physics.centerOfMass body
+                                                            Blue ->
+                                                                Nothing
 
-                                                Red ->
-                                                    Nothing
+                                                    BlueBall _ _ ->
+                                                        case gameModel.turn of
+                                                            Blue ->
+                                                                Physics.centerOfMass body
 
-                                        _ ->
-                                            Nothing
+                                                            Red ->
+                                                                Nothing
+
+                                                    _ ->
+                                                        Nothing
+                                            )
+                                            gameModel.bodies
+                                            |> Maybe.withDefault Point3d.origin
+                                in
+                                (case gameModel.stage of
+                                    Aiming ->
+                                        let
+                                            arrowDirection =
+                                                (case gameModel.turn of
+                                                    Red ->
+                                                        Direction3d.negativeX
+
+                                                    Blue ->
+                                                        Direction3d.positiveX
+                                                )
+                                                    |> Direction3d.rotateAround
+                                                        (case gameModel.turn of
+                                                            Red ->
+                                                                Direction3d.positiveY
+
+                                                            Blue ->
+                                                                Direction3d.negativeY
+                                                        )
+                                                        (gameModel.elevantionRaw
+                                                            |> String.toFloat
+                                                            |> Maybe.withDefault 0
+                                                            |> Angle.degrees
+                                                        )
+                                                    |> Direction3d.rotateAround
+                                                        Direction3d.negativeZ
+                                                        (gameModel.rotationRaw
+                                                            |> String.toFloat
+                                                            |> Maybe.withDefault 0
+                                                            |> Angle.degrees
+                                                        )
+
+                                            arrowLength =
+                                                gameModel.forceRaw
+                                                    |> String.toFloat
+                                                    |> Maybe.map (\f -> f * 8)
+                                                    |> Maybe.withDefault 100
+                                                    |> Length.centimeters
+                                        in
+                                        Scene3d.group
+                                            [ Scene3d.cylinder
+                                                (Scene3d.Material.matte Color.green)
+                                                (Cylinder3d.startingAt
+                                                    ballCenter
+                                                    arrowDirection
+                                                    { radius = Length.centimeters 5
+                                                    , length = arrowLength
+                                                    }
+                                                )
+                                            , Scene3d.cone
+                                                (Scene3d.Material.matte Color.green)
+                                                (Cone3d.startingAt
+                                                    (ballCenter
+                                                        |> Point3d.translateIn arrowDirection
+                                                            arrowLength
+                                                    )
+                                                    arrowDirection
+                                                    { radius = Length.centimeters 15
+                                                    , length = Length.centimeters 40
+                                                    }
+                                                )
+                                            ]
+
+                                    Simulating ->
+                                        Scene3d.nothing
                                 )
-                                model.bodies
-                                |> Maybe.withDefault Point3d.origin
-                    in
-                    (case model.stage of
-                        Aiming ->
-                            let
-                                arrowDirection =
-                                    (case model.turn of
-                                        Red ->
-                                            Direction3d.negativeX
-
-                                        Blue ->
-                                            Direction3d.positiveX
-                                    )
-                                        |> Direction3d.rotateAround
-                                            (case model.turn of
-                                                Red ->
-                                                    Direction3d.positiveY
-
-                                                Blue ->
-                                                    Direction3d.negativeY
-                                            )
-                                            (model.elevantionRaw
-                                                |> String.toFloat
-                                                |> Maybe.withDefault 0
-                                                |> Angle.degrees
-                                            )
-                                        |> Direction3d.rotateAround
-                                            Direction3d.negativeZ
-                                            (model.rotationRaw
-                                                |> String.toFloat
-                                                |> Maybe.withDefault 0
-                                                |> Angle.degrees
-                                            )
-
-                                arrowLength =
-                                    model.forceRaw
-                                        |> String.toFloat
-                                        |> Maybe.map (\f -> f * 8)
-                                        |> Maybe.withDefault 100
-                                        |> Length.centimeters
-                            in
-                            Scene3d.group
-                                [ Scene3d.cylinder
-                                    (Scene3d.Material.matte Color.green)
-                                    (Cylinder3d.startingAt
-                                        ballCenter
-                                        arrowDirection
-                                        { radius = Length.centimeters 5
-                                        , length = arrowLength
-                                        }
-                                    )
-                                , Scene3d.cone
-                                    (Scene3d.Material.matte Color.green)
-                                    (Cone3d.startingAt
-                                        (ballCenter
-                                            |> Point3d.translateIn arrowDirection
-                                                arrowLength
+                                    :: backgroundScenery
+                                    :: List.map
+                                        (bodyToEntity
+                                            model.boxMesh
+                                            model.boxMaterialRed
+                                            model.boxMaterialBlue
+                                            model.cylinderMesh
                                         )
-                                        arrowDirection
-                                        { radius = Length.centimeters 15
-                                        , length = Length.centimeters 40
-                                        }
-                                    )
-                                ]
+                                        gameModel.bodies
+                            }
+                        ]
+                    , Html.form
+                        [ Html.Attributes.style "position" "fixed"
+                        , Html.Attributes.style "display" "flex"
+                        , Html.Attributes.style "flex-direction" "column"
+                        , Html.Attributes.style "gap" "0.5rem"
+                        , Html.Events.onSubmit UserFiredBall
+                        , Html.Attributes.disabled (gameModel.stage /= Aiming)
+                        ]
+                        [ Html.input
+                            [ Html.Attributes.placeholder "Elevation (Degrees)"
+                            , Html.Attributes.style "font-size" "1.25rem"
+                            , Html.Attributes.type_ "number"
+                            , Html.Attributes.min "0"
+                            , Html.Attributes.step "1"
+                            , Html.Attributes.value gameModel.elevantionRaw
+                            , Html.Events.onInput UserEnteredElevation
+                            ]
+                            []
+                        , Html.input
+                            [ Html.Attributes.placeholder "Rotation (Degrees)"
+                            , Html.Attributes.style "font-size" "1.25rem"
+                            , Html.Attributes.type_ "number"
+                            , Html.Attributes.step "1"
+                            , Html.Attributes.value gameModel.rotationRaw
+                            , Html.Events.onInput UserEnteredRotation
+                            ]
+                            []
+                        , Html.input
+                            [ Html.Attributes.placeholder "Force (Meganewtons)"
+                            , Html.Attributes.style "font-size" "1.25rem"
+                            , Html.Attributes.type_ "number"
+                            , Html.Attributes.min "0"
+                            , Html.Attributes.step "1"
+                            , Html.Attributes.max "80"
+                            , Html.Attributes.value gameModel.forceRaw
+                            , Html.Events.onInput UserEnteredForce
+                            ]
+                            []
+                        , Html.button
+                            [ Html.Attributes.type_ "submit"
+                            , Html.Attributes.style "font-size" "1.25rem"
+                            , Html.Attributes.style "border" "none"
+                            , Html.Attributes.style "color" "white"
+                            , Html.Attributes.style "background-color" <|
+                                case gameModel.turn of
+                                    Red ->
+                                        "red"
 
-                        Simulating ->
-                            Scene3d.nothing
-                    )
-                        :: backgroundScenery
-                        :: List.map
-                            (bodyToEntity
-                                model.boxMesh
-                                model.boxMaterialRed
-                                model.boxMaterialBlue
-                                model.cylinderMesh
-                            )
-                            model.bodies
-                }
-            ]
-        , Html.form
-            [ Html.Attributes.style "position" "fixed"
-            , Html.Attributes.style "display" "flex"
-            , Html.Attributes.style "flex-direction" "column"
-            , Html.Attributes.style "gap" "0.5rem"
-            , Html.Events.onSubmit UserFiredBall
-            , Html.Attributes.disabled (model.stage /= Aiming)
-            ]
-            [ Html.input
-                [ Html.Attributes.placeholder "Elevation (Degrees)"
-                , Html.Attributes.style "font-size" "1.25rem"
-                , Html.Attributes.type_ "number"
-                , Html.Attributes.min "0"
-                , Html.Attributes.step "1"
-                , Html.Attributes.value model.elevantionRaw
-                , Html.Events.onInput UserEnteredElevation
-                ]
-                []
-            , Html.input
-                [ Html.Attributes.placeholder "Rotation (Degrees)"
-                , Html.Attributes.style "font-size" "1.25rem"
-                , Html.Attributes.type_ "number"
-                , Html.Attributes.step "1"
-                , Html.Attributes.value model.rotationRaw
-                , Html.Events.onInput UserEnteredRotation
-                ]
-                []
-            , Html.input
-                [ Html.Attributes.placeholder "Force (Meganewtons)"
-                , Html.Attributes.style "font-size" "1.25rem"
-                , Html.Attributes.type_ "number"
-                , Html.Attributes.min "0"
-                , Html.Attributes.step "1"
-                , Html.Attributes.max "80"
-                , Html.Attributes.value model.forceRaw
-                , Html.Events.onInput UserEnteredForce
-                ]
-                []
-            , Html.button
-                [ Html.Attributes.type_ "submit"
-                , Html.Attributes.style "font-size" "1.25rem"
-                , Html.Attributes.style "border" "none"
-                , Html.Attributes.style "color" "white"
-                , Html.Attributes.style "background-color" <|
-                    case model.turn of
-                        Red ->
-                            "red"
+                                    Blue ->
+                                        "blue"
+                            ]
+                            [ Html.text "Fire!" ]
+                        , Html.p []
+                            [ Html.text <|
+                                if gameModel.myColor == gameModel.turn then
+                                    "Your turn"
 
-                        Blue ->
-                            "blue"
-                ]
-                [ Html.text "Fire!" ]
-            ]
-        , Html.input
-            [ Html.Attributes.style "position" "fixed"
-            , Html.Attributes.style "bottom" "2rem"
-            , Html.Attributes.type_ "range"
-            , Html.Attributes.min "0"
-            , Html.Attributes.max "360"
-            , Html.Attributes.step "1"
-            , Html.Attributes.value (String.fromFloat model.cameraRotation)
-            , Html.Events.onInput UserRotatedCamera
-            ]
-            []
-        ]
+                                else
+                                    "Their turn"
+                            ]
+                        ]
+                    , Html.input
+                        [ Html.Attributes.style "position" "fixed"
+                        , Html.Attributes.style "bottom" "2rem"
+                        , Html.Attributes.type_ "range"
+                        , Html.Attributes.min "0"
+                        , Html.Attributes.max "360"
+                        , Html.Attributes.step "1"
+                        , Html.Attributes.value (String.fromFloat gameModel.cameraRotation)
+                        , Html.Events.onInput UserRotatedCamera
+                        ]
+                        []
+                    ]
     }
 
 
@@ -1076,100 +928,3 @@ bodyToEntity boxMesh boxMaterialRed boxMaterialBlue cylinderMesh ( id, body ) =
                         }
                     )
                     b
-
-
-subscriptions : FrontendModel -> Sub FrontendMsg
-subscriptions model =
-    Sub.batch
-        [ Browser.Events.onResize Resize
-        , case model.stage of
-            Aiming ->
-                Sub.none
-
-            Simulating ->
-                Browser.Events.onAnimationFrameDelta Tick
-        ]
-
-
-decodeMouseRay :
-    Float
-    -> Turn
-    -> ( Quantity Int Pixels, Quantity Int Pixels )
-    -> (Axis3d Meters WorldCoordinates -> msg)
-    -> Decoder msg
-decodeMouseRay cameraRotation turn ( width, height ) rayToMsg =
-    Json.Decode.map2
-        (\x y ->
-            rayToMsg <|
-                Camera3d.ray (camera cameraRotation turn)
-                    (Rectangle2d.with
-                        { x1 = Quantity.zero
-                        , y1 = Quantity.toFloatQuantity height
-                        , x2 = Quantity.toFloatQuantity width
-                        , y2 = Quantity.zero
-                        }
-                    )
-                    (Point2d.pixels x y)
-        )
-        (Json.Decode.field "pageX" Json.Decode.float)
-        (Json.Decode.field "pageY" Json.Decode.float)
-
-
-
---
-
-
-physicsCone : Cone3d Meters BodyCoordinates -> Physics.Material.Material Physics.Material.Dense -> Body
-physicsCone sourceCone material =
-    let
-        bottomCenter =
-            Cone3d.basePoint sourceCone
-
-        tip =
-            Cone3d.tipPoint sourceCone
-
-        radius =
-            Cone3d.radius sourceCone
-                |> Length.inMeters
-
-        bottom =
-            TriangularMesh.radial bottomCenter <|
-                Parameter1d.leading 12 <|
-                    \u ->
-                        let
-                            theta =
-                                2 * pi * u
-
-                            sinTheta =
-                                sin theta
-
-                            cosTheta =
-                                cos theta
-                        in
-                        bottomCenter
-                            |> Point3d.translateBy
-                                (Vector3d.unsafe { x = cosTheta * radius, y = -sinTheta * radius, z = 0 })
-
-        sides =
-            TriangularMesh.radial tip <|
-                Parameter1d.leading 12 <|
-                    \u ->
-                        let
-                            theta =
-                                2 * pi * u
-
-                            sinTheta =
-                                sin theta
-
-                            cosTheta =
-                                cos theta
-                        in
-                        bottomCenter
-                            |> Point3d.translateBy
-                                (Vector3d.unsafe { x = cosTheta * radius, y = sinTheta * radius, z = 0 })
-    in
-    Physics.dynamic
-        [ ( Physics.Shape.unsafeConvex (TriangularMesh.combine [ bottom, sides ])
-          , material
-          )
-        ]
