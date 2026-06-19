@@ -68,6 +68,7 @@ type Page
 
 type alias GameFrontend =
     { myColor : Turn
+    , opponentDisconnected : Maybe Duration
     , bodies : List ( Id, Body )
     , prevBodies : List ( Id, Body )
     , contacts : Physics.Contacts Id
@@ -145,7 +146,7 @@ type FrontendMsg
 
 
 type GameMsg
-    = Tick Float
+    = Tick Duration
     | UserEnteredElevation String
     | UserEnteredRotation String
     | UserEnteredForce String
@@ -174,6 +175,8 @@ type ToFrontend
     | GameRejoined GameRejoin
     | TurnChange TurnChangeGame
     | OtherPlayerFired Float Float Float
+    | OpponentDisconnected
+    | OpponentConnected
 
 
 type alias GameRejoin =

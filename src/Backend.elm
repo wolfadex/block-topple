@@ -40,6 +40,7 @@ import Scene3d.Material
 import Scene3d.Mesh
 import SeqSet
 import Sphere3d exposing (Sphere3d)
+import String exposing (left)
 import Task
 import Timestep exposing (Timestep)
 import TriangularMesh exposing (TriangularMesh)
@@ -108,22 +109,25 @@ update msg model =
                             ( ( left, leftTurn ), ( _, rightTurn ) ) =
                                 game.players
                           in
-                          Lamdera.sendToFrontend sessionId
-                            (GameRejoined
-                                { yourColor =
-                                    if sessionId == left then
-                                        leftTurn
+                          Cmd.batch
+                            [ Lamdera.sendToFrontend sessionId
+                                (GameRejoined
+                                    { yourColor =
+                                        if sessionId == left then
+                                            leftTurn
 
-                                    else
-                                        rightTurn
-                                , bodies = game.bodies
-                                , contacts = game.contacts
-                                , turn = game.turn
-                                , stage = game.stage
-                                , elapsed = game.elapsed
-                                , timestep = game.timestep
-                                }
-                            )
+                                        else
+                                            rightTurn
+                                    , bodies = game.bodies
+                                    , contacts = game.contacts
+                                    , turn = game.turn
+                                    , stage = game.stage
+                                    , elapsed = game.elapsed
+                                    , timestep = game.timestep
+                                    }
+                                )
+                            , Lamdera.sendToFrontend left OpponentConnected
+                            ]
                         )
 
             else
@@ -134,31 +138,7 @@ update msg model =
                         )
 
                     Just waitingId ->
-                        ( { model
-                            | waiting = Nothing
-                            , rooms =
-                                ( waitingId
-                                , sessionId
-                                , { players = ( ( waitingId, Red ), ( sessionId, Blue ) )
-                                  , bodies = initBodies
-                                  , contacts = Physics.emptyContacts
-                                  , turn = Red
-                                  , stage = Aiming
-                                  , elapsed = Duration.seconds 0
-                                  , timestep =
-                                        Timestep.init
-                                            { duration = Duration.seconds (1 / 120)
-                                            , maxSteps = 2
-                                            }
-                                  }
-                                )
-                                    :: model.rooms
-                          }
-                        , Cmd.batch
-                            [ Lamdera.sendToFrontend waitingId (GameStarted Red)
-                            , Lamdera.sendToFrontend sessionId (GameStarted Blue)
-                            ]
-                        )
+                        startMatch sessionId waitingId model
 
         OnDisconnect sessionId clientId ->
             case model.waiting of
@@ -169,34 +149,33 @@ update msg model =
                         )
 
                     else
-                        ( { model | hasLeft = SeqSet.insert sessionId model.hasLeft }
-                        , Process.sleep (30 * 1000)
-                            |> Task.perform (\() -> UserHasLeft sessionId)
-                        )
+                        notifyUserHasDisconnected sessionId model
 
                 Nothing ->
-                    ( { model | hasLeft = SeqSet.insert sessionId model.hasLeft }
-                    , Process.sleep (30 * 1000)
-                        |> Task.perform (\() -> UserHasLeft sessionId)
-                    )
+                    notifyUserHasDisconnected sessionId model
 
         UserHasLeft sessionId ->
             let
                 ( rooms, otherSession ) =
                     removeFromRoom sessionId model.rooms
             in
-            ( { model
-                | hasLeft = SeqSet.remove sessionId model.hasLeft
-                , rooms = rooms
-                , waiting = otherSession
-              }
-            , case otherSession of
+            case model.waiting of
                 Nothing ->
-                    Cmd.none
+                    ( { model
+                        | hasLeft = SeqSet.remove sessionId model.hasLeft
+                        , rooms = rooms
+                        , waiting = otherSession
+                      }
+                    , case otherSession of
+                        Nothing ->
+                            Cmd.none
 
-                Just sesId ->
-                    Lamdera.sendToFrontend sesId OtherPlayerLeft
-            )
+                        Just sesId ->
+                            Lamdera.sendToFrontend sesId OtherPlayerLeft
+                    )
+
+                Just waitingId ->
+                    startMatch sessionId waitingId model
 
         GameUpdateElapsed left right gameDetails ->
             ( model
@@ -205,6 +184,68 @@ update msg model =
                 , Lamdera.sendToFrontend right (TurnChange gameDetails)
                 ]
             )
+
+
+notifyUserHasDisconnected : SessionId -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+notifyUserHasDisconnected sessionId model =
+    let
+        otherPlayer =
+            listFindMap
+                (\( left, right, _ ) ->
+                    if sessionId == left then
+                        Just right
+
+                    else if sessionId == right then
+                        Just left
+
+                    else
+                        Nothing
+                )
+                model.rooms
+    in
+    case otherPlayer of
+        Nothing ->
+            ( { model | hasLeft = SeqSet.remove sessionId model.hasLeft }
+            , Cmd.none
+            )
+
+        Just otherId ->
+            ( { model | hasLeft = SeqSet.insert sessionId model.hasLeft }
+            , Cmd.batch
+                [ Process.sleep (30 * 1000)
+                    |> Task.perform (\() -> UserHasLeft sessionId)
+                , Lamdera.sendToFrontend otherId OpponentDisconnected
+                ]
+            )
+
+
+startMatch : SessionId -> SessionId -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+startMatch sessionId waitingId model =
+    ( { model
+        | waiting = Nothing
+        , rooms =
+            ( waitingId
+            , sessionId
+            , { players = ( ( waitingId, Red ), ( sessionId, Blue ) )
+              , bodies = initBodies
+              , contacts = Physics.emptyContacts
+              , turn = Red
+              , stage = Aiming
+              , elapsed = Duration.seconds 0
+              , timestep =
+                    Timestep.init
+                        { duration = Duration.seconds (1 / 120)
+                        , maxSteps = 2
+                        }
+              }
+            )
+                :: model.rooms
+      }
+    , Cmd.batch
+        [ Lamdera.sendToFrontend waitingId (GameStarted Red)
+        , Lamdera.sendToFrontend sessionId (GameStarted Blue)
+        ]
+    )
 
 
 removeFromRoom : SessionId -> List ( SessionId, SessionId, Game ) -> ( List ( SessionId, SessionId, Game ), Maybe SessionId )

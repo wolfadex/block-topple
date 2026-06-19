@@ -117,17 +117,21 @@ subscriptions : FrontendModel -> Sub FrontendMsg
 subscriptions model =
     Sub.batch
         [ Browser.Events.onResize Resize
-        , case model.page of
-            Waiting _ ->
-                Sub.none
+        , let
+            doTick =
+                case model.page of
+                    Waiting _ ->
+                        False
 
-            InGame gameModel ->
-                case gameModel.stage of
-                    Aiming ->
-                        Sub.none
+                    InGame gameModel ->
+                        (gameModel.stage == Simulating)
+                            || (gameModel.opponentDisconnected /= Nothing)
+          in
+          if doTick then
+            Browser.Events.onAnimationFrameDelta (\d -> GameMessage (Tick (Duration.milliseconds d)))
 
-                    Simulating ->
-                        Browser.Events.onAnimationFrameDelta (Tick >> GameMessage)
+          else
+            Sub.none
         ]
 
 
@@ -200,8 +204,25 @@ updateGame : GameMsg -> GameFrontend -> ( GameFrontend, Cmd FrontendMsg )
 updateGame msg model =
     case msg of
         Tick delta ->
-            Timestep.advance simulateStep (Duration.milliseconds delta) model
-                |> noCmd
+            if model.stage == Simulating then
+                let
+                    m =
+                        Timestep.advance simulateStep delta model
+                in
+                case model.opponentDisconnected of
+                    Nothing ->
+                        ( m, Cmd.none )
+
+                    Just opponentDisconnected ->
+                        ( { m | opponentDisconnected = Just (opponentDisconnected |> Quantity.minus delta) }, Cmd.none )
+
+            else
+                case model.opponentDisconnected of
+                    Nothing ->
+                        ( model, Cmd.none )
+
+                    Just opponentDisconnected ->
+                        ( { model | opponentDisconnected = Just (opponentDisconnected |> Quantity.minus delta) }, Cmd.none )
 
         UserEnteredElevation angle ->
             { model | elevantionRaw = angle }
@@ -420,6 +441,7 @@ updateFromBackend msg model =
                 | page =
                     InGame
                         { myColor = myColor
+                        , opponentDisconnected = Nothing
                         , bodies = initBodies
                         , prevBodies = initBodies
                         , contacts = Physics.emptyContacts
@@ -454,6 +476,7 @@ updateFromBackend msg model =
                 | page =
                     InGame
                         { myColor = game.yourColor
+                        , opponentDisconnected = Nothing
                         , bodies = game.bodies
                         , prevBodies = game.bodies
                         , contacts = game.contacts
@@ -507,6 +530,22 @@ updateFromBackend msg model =
                     ( { model | page = InGame (fireBall elevationF rotationF forceF game) }
                     , Cmd.none
                     )
+
+        OpponentDisconnected ->
+            case model.page of
+                Waiting _ ->
+                    ( model, Cmd.none )
+
+                InGame game ->
+                    ( { model | page = InGame { game | opponentDisconnected = Just (Duration.seconds 30) } }, Cmd.none )
+
+        OpponentConnected ->
+            case model.page of
+                Waiting _ ->
+                    ( model, Cmd.none )
+
+                InGame game ->
+                    ( { model | page = InGame { game | opponentDisconnected = Nothing } }, Cmd.none )
 
 
 initTimestep : Timestep
@@ -706,7 +745,13 @@ view model =
                                         "blue"
                             ]
                             [ Html.text "Fire!" ]
-                        , Html.p []
+                        , Html.p
+                            [ Html.Attributes.style "color" "white"
+                            , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                            , Html.Attributes.style "padding" "0.25rem"
+                            , Html.Attributes.style "text-align" "center"
+                            , Html.Attributes.style "margin" "0"
+                            ]
                             [ Html.text <|
                                 if gameModel.myColor == gameModel.turn then
                                     "Your turn"
@@ -714,6 +759,25 @@ view model =
                                 else
                                     "Their turn"
                             ]
+                        , case gameModel.opponentDisconnected of
+                            Nothing ->
+                                Html.text ""
+
+                            Just timeToReconnect ->
+                                Html.p
+                                    [ Html.Attributes.style "color" "white"
+                                    , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                                    , Html.Attributes.style "padding" "0.25rem"
+                                    , Html.Attributes.style "text-align" "center"
+                                    , Html.Attributes.style "margin" "0"
+                                    ]
+                                    [ timeToReconnect
+                                        |> Duration.inSeconds
+                                        |> floor
+                                        |> String.fromInt
+                                        |> (\s -> "Opponent disconnect: " ++ s ++ "s")
+                                        |> Html.text
+                                    ]
                         ]
                     , Html.input
                         [ Html.Attributes.style "position" "fixed"
