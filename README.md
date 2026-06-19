@@ -1,6 +1,6 @@
 # Block Topple
 
-A game about toppling block walls
+A game about toppling block walls. Win by knocking down your opponents towers!
 
 ## Features
 - [elm-watch](https://lydell.github.io/elm-watch/what-elm-watch-is/) for live reloading and dev server

@@ -124,6 +124,8 @@ update msg model =
                                     , stage = game.stage
                                     , elapsed = game.elapsed
                                     , timestep = game.timestep
+                                    , redTowersRemaining = game.redTowersRemaining
+                                    , blueTowersRemaining = game.blueTowersRemaining
                                     }
                                 )
                             , Lamdera.sendToFrontend left OpponentConnected
@@ -221,6 +223,10 @@ notifyUserHasDisconnected sessionId model =
 
 startMatch : SessionId -> SessionId -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 startMatch sessionId waitingId model =
+    let
+        ( blueTowers, redTowers ) =
+            countAllTowers initBodies
+    in
     ( { model
         | waiting = Nothing
         , rooms =
@@ -237,6 +243,8 @@ startMatch sessionId waitingId model =
                         { duration = Duration.seconds (1 / 120)
                         , maxSteps = 2
                         }
+              , redTowersRemaining = redTowers
+              , blueTowersRemaining = blueTowers
               }
             )
                 :: model.rooms
@@ -379,6 +387,8 @@ updateFromFrontend sessionId clientId msg model =
                             , contacts = game.contacts
                             , turn = game.turn
                             , stage = game.stage
+                            , redTowersRemaining = game.redTowersRemaining
+                            , blueTowersRemaining = game.blueTowersRemaining
                             }
                     in
                     Cmd.batch
@@ -412,7 +422,7 @@ runTurnHelper initialTurn game =
                 (Duration.seconds (1 / 120))
                 game
     in
-    if steppedGame.turn /= initialTurn then
+    if steppedGame.stage /= Simulating then
         steppedGame
 
     else
@@ -431,22 +441,42 @@ simulateStep model =
                 model.bodies
 
         newElapsed =
-            Debug.log "newElapsed" <|
-                case model.stage of
-                    Aiming ->
-                        model.elapsed
+            case model.stage of
+                Aiming ->
+                    model.elapsed
 
-                    Simulating ->
-                        Quantity.plus model.elapsed (Timestep.duration model.timestep)
+                Simulating ->
+                    Quantity.plus model.elapsed (Timestep.duration model.timestep)
+
+                GameOver _ ->
+                    model.elapsed
+
+        ( blueTowers, redTowers ) =
+            countAllTowers simulated
+
+        ( fallenBlueTowers, fallenRedTowers ) =
+            countFallenTowers newContacts
 
         newModel =
             { model
                 | bodies = simulated
                 , contacts = newContacts
                 , elapsed = newElapsed
+                , redTowersRemaining = redTowers - fallenRedTowers
+                , blueTowersRemaining = blueTowers - fallenBlueTowers
             }
     in
-    if newElapsed |> Quantity.greaterThanOrEqualTo (Duration.seconds 5) then
+    if newModel.redTowersRemaining < 1 then
+        { newModel
+            | stage = GameOver Blue
+        }
+
+    else if newModel.blueTowersRemaining < 1 then
+        { newModel
+            | stage = GameOver Red
+        }
+
+    else if newElapsed |> Quantity.greaterThanOrEqualTo (Duration.seconds 5) then
         { newModel
             | stage = Aiming
             , turn =

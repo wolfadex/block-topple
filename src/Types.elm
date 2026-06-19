@@ -80,6 +80,8 @@ type alias GameFrontend =
     , elapsed : Duration
     , timestep : Timestep
     , cameraRotation : Float
+    , redTowersRemaining : Int
+    , blueTowersRemaining : Int
     }
 
 
@@ -98,6 +100,8 @@ type alias Game =
     , stage : Stage
     , elapsed : Duration
     , timestep : Timestep
+    , redTowersRemaining : Int
+    , blueTowersRemaining : Int
     }
 
 
@@ -128,6 +132,7 @@ type Turn
 type Stage
     = Aiming
     | Simulating
+    | GameOver Turn
 
 
 
@@ -187,6 +192,8 @@ type alias GameRejoin =
     , stage : Stage
     , elapsed : Duration
     , timestep : Timestep
+    , redTowersRemaining : Int
+    , blueTowersRemaining : Int
     }
 
 
@@ -195,6 +202,8 @@ type alias TurnChangeGame =
     , contacts : Physics.Contacts Id
     , turn : Turn
     , stage : Stage
+    , redTowersRemaining : Int
+    , blueTowersRemaining : Int
     }
 
 
@@ -398,7 +407,7 @@ initTower xOffset yOffset color =
                 , length = Length.centimeters 80
                 }
       in
-      ( Block (Cone cone) Color.gray
+      ( Block (Cone cone) color
       , physicsCone cone
             Physics.Material.wood
       )
@@ -491,6 +500,82 @@ blueBallStart =
 ballRadius : Length
 ballRadius =
     Length.centimeters 60
+
+
+
+--
+
+
+countAllTowers : List ( Id, Body ) -> ( Int, Int )
+countAllTowers bodies =
+    List.foldl
+        (\( id, _ ) (( blue, red ) as total) ->
+            case id of
+                Block (Cone _) color ->
+                    if color == Color.lightRed then
+                        ( blue, red + 1 )
+
+                    else
+                        ( blue + 1, red )
+
+                _ ->
+                    total
+        )
+        ( 0, 0 )
+        bodies
+
+
+countFallenTowers : Physics.Contacts Id -> ( Int, Int )
+countFallenTowers contacts =
+    contacts
+        |> Physics.contactPoints
+            (\left right ->
+                case left of
+                    Block (Cone _) _ ->
+                        case right of
+                            Floor ->
+                                True
+
+                            _ ->
+                                False
+
+                    Floor ->
+                        case right of
+                            Block (Cone _) _ ->
+                                True
+
+                            _ ->
+                                False
+
+                    _ ->
+                        False
+            )
+        |> List.foldl
+            (\( left, right, _ ) (( blue, red ) as total) ->
+                case left of
+                    Block (Cone _) color ->
+                        if color == Color.lightRed then
+                            ( blue, red + 1 )
+
+                        else
+                            ( blue + 1, red )
+
+                    Floor ->
+                        case right of
+                            Block (Cone _) color ->
+                                if color == Color.lightRed then
+                                    ( blue, red + 1 )
+
+                                else
+                                    ( blue + 1, red )
+
+                            _ ->
+                                total
+
+                    _ ->
+                        total
+            )
+            ( 0, 0 )
 
 
 

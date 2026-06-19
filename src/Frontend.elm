@@ -358,15 +358,36 @@ simulateStep model =
                 Simulating ->
                     Quantity.plus model.elapsed (Timestep.duration model.timestep)
 
+                GameOver _ ->
+                    model.elapsed
+
+        ( blueTowers, redTowers ) =
+            countAllTowers simulated
+
+        ( fallenBlueTowers, fallenRedTowers ) =
+            countFallenTowers newContacts
+
         newModel =
             { model
                 | bodies = simulated
                 , prevBodies = model.bodies
                 , contacts = newContacts
                 , elapsed = newElapsed
+                , redTowersRemaining = redTowers - fallenRedTowers
+                , blueTowersRemaining = blueTowers - fallenBlueTowers
             }
     in
-    if newElapsed |> Quantity.greaterThanOrEqualTo (Duration.seconds 5) then
+    if newModel.redTowersRemaining < 1 then
+        { newModel
+            | stage = GameOver Blue
+        }
+
+    else if newModel.blueTowersRemaining < 1 then
+        { newModel
+            | stage = GameOver Red
+        }
+
+    else if newElapsed |> Quantity.greaterThanOrEqualTo (Duration.seconds 5) then
         { newModel
             | stage = Aiming
             , turn =
@@ -437,6 +458,10 @@ updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd Frontend
 updateFromBackend msg model =
     case msg of
         GameStarted myColor ->
+            let
+                ( blueTowers, redTowers ) =
+                    countAllTowers initBodies
+            in
             ( { model
                 | page =
                     InGame
@@ -459,6 +484,8 @@ updateFromBackend msg model =
 
                                 Blue ->
                                     90
+                        , redTowersRemaining = redTowers
+                        , blueTowersRemaining = blueTowers
                         }
               }
             , Cmd.none
@@ -494,6 +521,8 @@ updateFromBackend msg model =
 
                                 Blue ->
                                     90
+                        , redTowersRemaining = game.redTowersRemaining
+                        , blueTowersRemaining = game.blueTowersRemaining
                         }
               }
             , Cmd.none
@@ -512,7 +541,7 @@ updateFromBackend msg model =
                                     | bodies = changes.bodies
                                     , prevBodies = changes.bodies
                                     , contacts = changes.contacts
-                                    , turn = Debug.log "next turn?" changes.turn
+                                    , turn = changes.turn
                                     , stage = Aiming
                                     , elapsed = Duration.seconds 0
                                     , timestep = initTimestep
@@ -681,6 +710,9 @@ view model =
 
                                     Simulating ->
                                         Scene3d.nothing
+
+                                    GameOver _ ->
+                                        Scene3d.nothing
                                 )
                                     :: backgroundScenery
                                     :: List.map
@@ -693,92 +725,139 @@ view model =
                                         gameModel.bodies
                             }
                         ]
-                    , Html.form
-                        [ Html.Attributes.style "position" "fixed"
-                        , Html.Attributes.style "display" "flex"
-                        , Html.Attributes.style "flex-direction" "column"
-                        , Html.Attributes.style "gap" "0.5rem"
-                        , Html.Events.onSubmit UserFiredBall
-                        , Html.Attributes.disabled (gameModel.stage /= Aiming)
-                        ]
-                        [ Html.input
-                            [ Html.Attributes.placeholder "Elevation (Degrees)"
-                            , Html.Attributes.style "font-size" "1.25rem"
-                            , Html.Attributes.type_ "number"
-                            , Html.Attributes.min "0"
-                            , Html.Attributes.step "1"
-                            , Html.Attributes.value gameModel.elevantionRaw
-                            , Html.Events.onInput UserEnteredElevation
-                            ]
-                            []
-                        , Html.input
-                            [ Html.Attributes.placeholder "Rotation (Degrees)"
-                            , Html.Attributes.style "font-size" "1.25rem"
-                            , Html.Attributes.type_ "number"
-                            , Html.Attributes.step "1"
-                            , Html.Attributes.value gameModel.rotationRaw
-                            , Html.Events.onInput UserEnteredRotation
-                            ]
-                            []
-                        , Html.input
-                            [ Html.Attributes.placeholder "Force (Meganewtons)"
-                            , Html.Attributes.style "font-size" "1.25rem"
-                            , Html.Attributes.type_ "number"
-                            , Html.Attributes.min "0"
-                            , Html.Attributes.step "1"
-                            , Html.Attributes.max "80"
-                            , Html.Attributes.value gameModel.forceRaw
-                            , Html.Events.onInput UserEnteredForce
-                            ]
-                            []
-                        , Html.button
-                            [ Html.Attributes.type_ "submit"
-                            , Html.Attributes.style "font-size" "1.25rem"
-                            , Html.Attributes.style "border" "none"
-                            , Html.Attributes.style "color" "white"
-                            , Html.Attributes.style "background-color" <|
-                                case gameModel.turn of
-                                    Red ->
-                                        "red"
+                    , case gameModel.stage of
+                        GameOver winner ->
+                            Html.div
+                                [ Html.Attributes.style "position" "fixed"
+                                , Html.Attributes.style "top" "30%"
+                                , Html.Attributes.style "width" "100vw"
+                                , Html.Attributes.style "text-align" "center"
+                                ]
+                                [ Html.h1
+                                    [ Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                                    , Html.Attributes.style "color" "white"
+                                    , Html.Attributes.style "width" "100vw"
+                                    ]
+                                    [ Html.text <|
+                                        if gameModel.myColor == winner then
+                                            "You won!"
 
-                                    Blue ->
-                                        "blue"
-                            ]
-                            [ Html.text "Fire!" ]
-                        , Html.p
-                            [ Html.Attributes.style "color" "white"
-                            , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
-                            , Html.Attributes.style "padding" "0.25rem"
-                            , Html.Attributes.style "text-align" "center"
-                            , Html.Attributes.style "margin" "0"
-                            ]
-                            [ Html.text <|
-                                if gameModel.myColor == gameModel.turn then
-                                    "Your turn"
+                                        else
+                                            "They won"
+                                    ]
+                                ]
 
-                                else
-                                    "Their turn"
-                            ]
-                        , case gameModel.opponentDisconnected of
-                            Nothing ->
-                                Html.text ""
+                        _ ->
+                            Html.form
+                                [ Html.Attributes.style "position" "fixed"
+                                , Html.Attributes.style "display" "flex"
+                                , Html.Attributes.style "flex-direction" "column"
+                                , Html.Attributes.style "gap" "0.5rem"
+                                , Html.Events.onSubmit UserFiredBall
+                                , Html.Attributes.disabled (gameModel.stage /= Aiming)
+                                ]
+                                [ Html.input
+                                    [ Html.Attributes.placeholder "Elevation (Degrees)"
+                                    , Html.Attributes.style "font-size" "1.25rem"
+                                    , Html.Attributes.type_ "number"
+                                    , Html.Attributes.min "0"
+                                    , Html.Attributes.step "1"
+                                    , Html.Attributes.value gameModel.elevantionRaw
+                                    , Html.Events.onInput UserEnteredElevation
+                                    ]
+                                    []
+                                , Html.input
+                                    [ Html.Attributes.placeholder "Rotation (Degrees)"
+                                    , Html.Attributes.style "font-size" "1.25rem"
+                                    , Html.Attributes.type_ "number"
+                                    , Html.Attributes.step "1"
+                                    , Html.Attributes.value gameModel.rotationRaw
+                                    , Html.Events.onInput UserEnteredRotation
+                                    ]
+                                    []
+                                , Html.input
+                                    [ Html.Attributes.placeholder "Force (Meganewtons)"
+                                    , Html.Attributes.style "font-size" "1.25rem"
+                                    , Html.Attributes.type_ "number"
+                                    , Html.Attributes.min "0"
+                                    , Html.Attributes.step "1"
+                                    , Html.Attributes.max "80"
+                                    , Html.Attributes.value gameModel.forceRaw
+                                    , Html.Events.onInput UserEnteredForce
+                                    ]
+                                    []
+                                , Html.button
+                                    [ Html.Attributes.type_ "submit"
+                                    , Html.Attributes.style "font-size" "1.25rem"
+                                    , Html.Attributes.style "border" "none"
+                                    , Html.Attributes.style "color" "white"
+                                    , Html.Attributes.style "background-color" <|
+                                        case gameModel.turn of
+                                            Red ->
+                                                "red"
 
-                            Just timeToReconnect ->
-                                Html.p
+                                            Blue ->
+                                                "blue"
+                                    ]
+                                    [ Html.text <|
+                                        if gameModel.turn == gameModel.myColor then
+                                            "Fire!"
+
+                                        else
+                                            "Wait"
+                                    ]
+                                , Html.p
                                     [ Html.Attributes.style "color" "white"
                                     , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
                                     , Html.Attributes.style "padding" "0.25rem"
                                     , Html.Attributes.style "text-align" "center"
                                     , Html.Attributes.style "margin" "0"
                                     ]
-                                    [ timeToReconnect
-                                        |> Duration.inSeconds
-                                        |> floor
-                                        |> String.fromInt
-                                        |> (\s -> "Opponent disconnect: " ++ s ++ "s")
-                                        |> Html.text
+                                    [ Html.text <|
+                                        if gameModel.myColor == gameModel.turn then
+                                            "Your turn"
+
+                                        else
+                                            "Their turn"
                                     ]
-                        ]
+                                , Html.p
+                                    [ Html.Attributes.style "color" "white"
+                                    , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                                    , Html.Attributes.style "padding" "0.25rem"
+                                    , Html.Attributes.style "text-align" "center"
+                                    , Html.Attributes.style "margin" "0"
+                                    ]
+                                    [ Html.text <|
+                                        ("Towers remaining: "
+                                            ++ (String.fromInt <|
+                                                    if gameModel.myColor == Red then
+                                                        gameModel.redTowersRemaining
+
+                                                    else
+                                                        gameModel.blueTowersRemaining
+                                               )
+                                        )
+                                    ]
+                                , case gameModel.opponentDisconnected of
+                                    Nothing ->
+                                        Html.text ""
+
+                                    Just timeToReconnect ->
+                                        Html.p
+                                            [ Html.Attributes.style "color" "white"
+                                            , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                                            , Html.Attributes.style "padding" "0.25rem"
+                                            , Html.Attributes.style "text-align" "center"
+                                            , Html.Attributes.style "margin" "0"
+                                            ]
+                                            [ timeToReconnect
+                                                |> Duration.inSeconds
+                                                |> floor
+                                                |> String.fromInt
+                                                |> (\s -> "Opponent disconnect: " ++ s ++ "s")
+                                                |> Html.text
+                                            ]
+                                ]
                     , Html.input
                         [ Html.Attributes.style "position" "fixed"
                         , Html.Attributes.style "bottom" "2rem"
