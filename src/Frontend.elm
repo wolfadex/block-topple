@@ -789,15 +789,16 @@ view model =
                                 , Html.button
                                     [ Html.Attributes.type_ "submit"
                                     , Html.Attributes.style "font-size" "1.25rem"
-                                    , Html.Attributes.style "border" "none"
+                                    , Html.Attributes.style "border" "3px solid white"
+                                    , Html.Attributes.style "border-radius" "0.5rem"
+                                    , Html.Attributes.style "cursor" "pointer"
                                     , Html.Attributes.style "color" "white"
                                     , Html.Attributes.style "background-color" <|
-                                        case gameModel.turn of
-                                            Red ->
-                                                "red"
+                                        if gameModel.turn == gameModel.myColor then
+                                            turnToCssColor gameModel.myColor
 
-                                            Blue ->
-                                                "blue"
+                                        else
+                                            "rgba(0, 0, 0, 0.75)"
                                     ]
                                     [ Html.text <|
                                         if gameModel.turn == gameModel.myColor then
@@ -871,6 +872,15 @@ view model =
                         []
                     ]
     }
+
+
+turnToCssColor turn =
+    case turn of
+        Red ->
+            "red"
+
+        Blue ->
+            "blue"
 
 
 backgroundScenery : Scene3d.Entity WorldCoordinates
