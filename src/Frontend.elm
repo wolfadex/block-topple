@@ -6,7 +6,7 @@ import Block3d exposing (Block3d)
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events
-import Browser.Navigation as Nav
+import Browser.Navigation
 import Camera3d exposing (Camera3d)
 import Color exposing (Color)
 import Cone3d exposing (Cone3d)
@@ -42,7 +42,7 @@ import Task
 import Timestep exposing (Timestep)
 import TriangularMesh exposing (TriangularMesh)
 import Types exposing (..)
-import Url
+import Url exposing (Url)
 import Vector3d exposing (Vector3d)
 import WebGL.Texture
 
@@ -59,7 +59,7 @@ app =
         }
 
 
-init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
+init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
     ( { key = key
       , page = Waiting ""
@@ -147,12 +147,12 @@ update msg model =
             case urlRequest of
                 Internal url ->
                     ( model
-                    , Nav.pushUrl model.key (Url.toString url)
+                    , Browser.Navigation.pushUrl model.key (Url.toString url)
                     )
 
                 External url ->
                     ( model
-                    , Nav.load url
+                    , Browser.Navigation.load url
                     )
 
         UrlChanged url ->
@@ -203,6 +203,9 @@ update msg model =
 updateGame : GameMsg -> GameFrontend -> ( GameFrontend, Cmd FrontendMsg )
 updateGame msg model =
     case msg of
+        UserRequestedNewGame ->
+            ( model, Browser.Navigation.reload )
+
         Tick delta ->
             if model.stage == Simulating then
                 let
@@ -542,7 +545,7 @@ updateFromBackend msg model =
                                     , prevBodies = changes.bodies
                                     , contacts = changes.contacts
                                     , turn = changes.turn
-                                    , stage = Aiming
+                                    , stage = game.stage
                                     , elapsed = Duration.seconds 0
                                     , timestep = initTimestep
                                 }
@@ -745,6 +748,17 @@ view model =
                                         else
                                             "They won"
                                     ]
+                                , Html.button
+                                    [ Html.Attributes.type_ "button"
+                                    , Html.Attributes.style "font-size" "1.25rem"
+                                    , Html.Attributes.style "border" "3px solid white"
+                                    , Html.Attributes.style "border-radius" "0.5rem"
+                                    , Html.Attributes.style "cursor" "pointer"
+                                    , Html.Attributes.style "color" "white"
+                                    , Html.Attributes.style "background-color" "cornflowerblue"
+                                    , Html.Events.onClick UserRequestedNewGame
+                                    ]
+                                    [ Html.text "New Game" ]
                                 ]
 
                         _ ->

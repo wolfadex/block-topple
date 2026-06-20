@@ -157,6 +157,7 @@ type GameMsg
     | UserEnteredForce String
     | UserFiredBall
     | UserRotatedCamera String
+    | UserRequestedNewGame
 
 
 type ToBackend
@@ -213,8 +214,24 @@ type alias TurnChangeGame =
 --
 
 
+initBodiesTest : List ( Id, Body )
+initBodiesTest =
+    List.concat
+        [ [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
+          , initRedBall
+          ]
+        , initTower -800 0 Color.lightBlue
+        , initTower 800 0 Color.lightRed
+        ]
+
+
 initBodies : List ( Id, Body )
 initBodies =
+    initBodiesTest
+
+
+initBodiesBoxCastle : List ( Id, Body )
+initBodiesBoxCastle =
     List.concat
         [ [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
           , initRedBall
