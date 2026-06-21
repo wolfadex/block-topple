@@ -227,7 +227,8 @@ initBodiesTest =
 
 initBodies : List ( Id, Body )
 initBodies =
-    initBodiesTest
+    initBodiesBoxCastle
+
 
 
 initBodiesBoxCastle : List ( Id, Body )

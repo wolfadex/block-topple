@@ -14,7 +14,7 @@ node = "24"
 
 [tasks.dev]
 # run = "run-pty run-pty.json"
-run = "ladmera live"
+run = "lamdera live"
 
 [tasks.dev-elm]
 run = "elm-watch hot"
