@@ -33,6 +33,7 @@ import Plane3d
 import Point2d
 import Point3d exposing (Point3d)
 import Quantity exposing (Quantity)
+import Random
 import Rectangle2d
 import Scene3d exposing (Entity)
 import Scene3d.Material
@@ -62,7 +63,8 @@ type alias FrontendModel =
 
 
 type Page
-    = Waiting String
+    = Home String
+    | Waiting String
     | InGame GameFrontend
 
 
@@ -89,6 +91,8 @@ type alias BackendModel =
     { waiting : Maybe SessionId
     , rooms : List ( SessionId, SessionId, Game )
     , hasLeft : SeqSet SessionId
+    , seed : Random.Seed
+    , waitingForFriend : SeqDict String SessionId
     }
 
 
@@ -173,6 +177,7 @@ type BackendMsg
     | OnDisconnect SessionId ClientId
     | UserHasLeft SessionId
     | GameUpdateElapsed SessionId SessionId TurnChangeGame
+    | SeedInitialized Random.Seed
 
 
 type ToFrontend
@@ -228,7 +233,6 @@ initBodiesTest =
 initBodies : List ( Id, Body )
 initBodies =
     initBodiesBoxCastle
-
 
 
 initBodiesBoxCastle : List ( Id, Body )

@@ -34,10 +34,12 @@ import Point2d
 import Point3d exposing (Point3d)
 import Process
 import Quantity exposing (Quantity)
+import Random
 import Rectangle2d
 import Scene3d exposing (Entity)
 import Scene3d.Material
 import Scene3d.Mesh
+import SeqDict
 import SeqSet
 import Sphere3d exposing (Sphere3d)
 import String exposing (left)
@@ -64,8 +66,11 @@ init =
     ( { waiting = Nothing
       , rooms = []
       , hasLeft = SeqSet.empty
+      , seed = Random.initialSeed 0
+      , waitingForFriend = SeqDict.empty
       }
-    , Cmd.none
+    , Random.independentSeed
+        |> Random.generate SeedInitialized
     )
 
 
@@ -80,6 +85,9 @@ subscriptions _ =
 update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 update msg model =
     case msg of
+        SeedInitialized seed ->
+            ( { model | seed = seed }, Cmd.none )
+
         OnConnect sessionId clientId ->
             if SeqSet.member sessionId model.hasLeft then
                 case
@@ -96,7 +104,6 @@ update msg model =
                     Nothing ->
                         ( { model
                             | hasLeft = SeqSet.remove sessionId model.hasLeft
-                            , waiting = Just sessionId
                           }
                         , Cmd.none
                         )
@@ -133,14 +140,14 @@ update msg model =
                         )
 
             else
-                case model.waiting of
-                    Nothing ->
-                        ( { model | waiting = Just sessionId }
-                        , Cmd.none
-                        )
-
-                    Just waitingId ->
-                        startMatch sessionId waitingId model
+                -- case model.waiting of
+                --     Nothing ->
+                --         ( { model | waiting = Just sessionId }
+                --         , Cmd.none
+                --         )
+                --     Just waitingId ->
+                --         startMatch sessionId waitingId model
+                ( model, Cmd.none )
 
         OnDisconnect sessionId clientId ->
             case model.waiting of

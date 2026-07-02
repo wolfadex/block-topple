@@ -2,7 +2,7 @@
 _.path = ['{{config_root}}/node_modules/.bin']
 
 [tools]
-elm = "0.19"
+elm = "0.19.1"
 node = "24"
 
 "npm:@ryannhg/css-in-elm" = "1.0.0"

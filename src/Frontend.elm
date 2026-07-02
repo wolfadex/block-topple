@@ -1,6 +1,7 @@
 module Frontend exposing (..)
 
 import Angle exposing (Angle)
+import AppUrl exposing (AppUrl)
 import Axis3d exposing (Axis3d)
 import Block3d exposing (Block3d)
 import Browser exposing (UrlRequest(..))
@@ -11,6 +12,7 @@ import Camera3d exposing (Camera3d)
 import Color exposing (Color)
 import Cone3d exposing (Cone3d)
 import Cylinder3d exposing (Cylinder3d)
+import Dict
 import Direction3d
 import Duration exposing (Duration)
 import Force exposing (Force)
@@ -59,10 +61,24 @@ app =
         }
 
 
+urlToPage : Url -> Page
+urlToPage url =
+    let
+        appUrl =
+            AppUrl.fromUrl url
+    in
+    case Dict.get "g" appUrl.queryParameters of
+        Just (gameToJoin :: _) ->
+            Home gameToJoin
+
+        _ ->
+            Home ""
+
+
 init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
     ( { key = key
-      , page = Waiting ""
+      , page = urlToPage url
       , dimensions = ( Pixels.int 0, Pixels.int 0 )
 
       --
@@ -120,6 +136,9 @@ subscriptions model =
         , let
             doTick =
                 case model.page of
+                    Home _ ->
+                        False
+
                     Waiting _ ->
                         False
 
@@ -192,6 +211,9 @@ update msg model =
 
         GameMessage gameMsg ->
             case model.page of
+                Home _ ->
+                    ( model, Cmd.none )
+
                 Waiting _ ->
                     ( model, Cmd.none )
 
@@ -533,6 +555,9 @@ updateFromBackend msg model =
 
         TurnChange changes ->
             case model.page of
+                Home _ ->
+                    Debug.todo ""
+
                 Waiting _ ->
                     Debug.todo ""
 
@@ -555,6 +580,9 @@ updateFromBackend msg model =
 
         OtherPlayerFired elevationF rotationF forceF ->
             case model.page of
+                Home _ ->
+                    Debug.todo ""
+
                 Waiting _ ->
                     Debug.todo ""
 
@@ -565,6 +593,9 @@ updateFromBackend msg model =
 
         OpponentDisconnected ->
             case model.page of
+                Home _ ->
+                    ( model, Cmd.none )
+
                 Waiting _ ->
                     ( model, Cmd.none )
 
@@ -573,6 +604,9 @@ updateFromBackend msg model =
 
         OpponentConnected ->
             case model.page of
+                Home _ ->
+                    ( model, Cmd.none )
+
                 Waiting _ ->
                     ( model, Cmd.none )
 
@@ -593,299 +627,337 @@ view model =
     { title = "Block Topple"
     , body =
         case model.page of
+            Home gameToJoin ->
+                viewHome gameToJoin
+
             Waiting additionalMessage ->
-                [ Html.div
-                    [ Html.Attributes.style "position" "fixed"
-                    , Html.Attributes.style "left" "50%"
-                    , Html.Attributes.style "top" "50%"
-                    , Html.Attributes.style "transform" "translate(-50%, -50%)"
-                    ]
-                    [ Html.p [] [ Html.text additionalMessage ]
-                    , Html.p [] [ Html.text "waiting for another player ..." ]
-                    ]
-                ]
+                viewWaiting additionalMessage
 
             InGame gameModel ->
-                List.map (Html.map GameMessage) <|
-                    [ Html.div
-                        [ Html.Attributes.style "position" "absolute"
-                        , Html.Attributes.style "left" "0"
-                        , Html.Attributes.style "top" "0"
-                        ]
-                        [ Scene3d.sunny
-                            { upDirection = Direction3d.positiveZ
-                            , sunlightDirection = Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -60)
-                            , shadows = True
-                            , camera = camera gameModel.cameraRotation
-                            , dimensions = model.dimensions
-                            , background = Scene3d.backgroundColor (Color.rgb255 100 149 237)
-                            , clipDepth = Length.meters 0.1
-                            , entities =
-                                let
-                                    ballCenter =
-                                        listFindMap
-                                            (\( id, body ) ->
-                                                case id of
-                                                    RedBall _ _ ->
-                                                        case gameModel.turn of
-                                                            Red ->
-                                                                Physics.centerOfMass body
+                viewGame model gameModel
+    }
 
-                                                            Blue ->
-                                                                Nothing
 
-                                                    BlueBall _ _ ->
-                                                        case gameModel.turn of
-                                                            Blue ->
-                                                                Physics.centerOfMass body
+viewHome : String -> List (Html FrontendMsg)
+viewHome gameToJoin =
+    [ Html.h1 [] [ Html.text "Block Topple" ]
+    , Html.button
+        [ Html.Attributes.type_ "button" ]
+        [ Html.text "Play with a stranger" ]
+    , Html.button
+        [ Html.Attributes.type_ "button" ]
+        [ Html.text "Play with a friend" ]
+    , Html.form
+        []
+        [ Html.label
+            []
+            [ Html.span [] [ Html.text "Game to join" ]
+            , Html.input
+                []
+                []
+            ]
+        , Html.button
+            [ Html.Attributes.type_ "submit" ]
+            [ Html.text "Join" ]
+        ]
+    ]
 
-                                                            Red ->
-                                                                Nothing
 
-                                                    _ ->
-                                                        Nothing
-                                            )
-                                            gameModel.bodies
-                                            |> Maybe.withDefault Point3d.origin
-                                in
-                                (case gameModel.stage of
-                                    Aiming ->
-                                        let
-                                            arrowDirection =
-                                                (case gameModel.turn of
-                                                    Red ->
-                                                        Direction3d.negativeX
+viewWaiting : String -> List (Html FrontendMsg)
+viewWaiting additionalMessage =
+    [ Html.div
+        [ Html.Attributes.style "position" "fixed"
+        , Html.Attributes.style "left" "50%"
+        , Html.Attributes.style "top" "50%"
+        , Html.Attributes.style "transform" "translate(-50%, -50%)"
+        ]
+        [ Html.p [] [ Html.text additionalMessage ]
+        , Html.p [] [ Html.text "waiting for another player ..." ]
+        ]
+    ]
 
-                                                    Blue ->
-                                                        Direction3d.positiveX
-                                                )
-                                                    |> Direction3d.rotateAround
-                                                        (case gameModel.turn of
-                                                            Red ->
-                                                                Direction3d.positiveY
 
-                                                            Blue ->
-                                                                Direction3d.negativeY
-                                                        )
-                                                        (gameModel.elevantionRaw
-                                                            |> String.toFloat
-                                                            |> Maybe.withDefault 0
-                                                            |> Angle.degrees
-                                                        )
-                                                    |> Direction3d.rotateAround
-                                                        Direction3d.negativeZ
-                                                        (gameModel.rotationRaw
-                                                            |> String.toFloat
-                                                            |> Maybe.withDefault 0
-                                                            |> Angle.degrees
-                                                        )
+viewGame : FrontendModel -> GameFrontend -> List (Html FrontendMsg)
+viewGame model gameModel =
+    List.map (Html.map GameMessage) <|
+        [ Html.div
+            [ Html.Attributes.style "position" "absolute"
+            , Html.Attributes.style "left" "0"
+            , Html.Attributes.style "top" "0"
+            ]
+            [ Scene3d.sunny
+                { upDirection = Direction3d.positiveZ
+                , sunlightDirection = Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -60)
+                , shadows = True
+                , camera = camera gameModel.cameraRotation
+                , dimensions = model.dimensions
+                , background = Scene3d.backgroundColor (Color.rgb255 100 149 237)
+                , clipDepth = Length.meters 0.1
+                , entities =
+                    let
+                        ballCenter =
+                            listFindMap
+                                (\( id, body ) ->
+                                    case id of
+                                        RedBall _ _ ->
+                                            case gameModel.turn of
+                                                Red ->
+                                                    Physics.centerOfMass body
 
-                                            arrowLength =
-                                                gameModel.forceRaw
-                                                    |> String.toFloat
-                                                    |> Maybe.map (\f -> f * 8)
-                                                    |> Maybe.withDefault 100
-                                                    |> Length.centimeters
-                                        in
-                                        Scene3d.group
-                                            [ Scene3d.cylinder
-                                                (Scene3d.Material.matte Color.green)
-                                                (Cylinder3d.startingAt
-                                                    ballCenter
-                                                    arrowDirection
-                                                    { radius = Length.centimeters 5
-                                                    , length = arrowLength
-                                                    }
-                                                )
-                                            , Scene3d.cone
-                                                (Scene3d.Material.matte Color.green)
-                                                (Cone3d.startingAt
-                                                    (ballCenter
-                                                        |> Point3d.translateIn arrowDirection
-                                                            arrowLength
-                                                    )
-                                                    arrowDirection
-                                                    { radius = Length.centimeters 15
-                                                    , length = Length.centimeters 40
-                                                    }
-                                                )
-                                            ]
+                                                Blue ->
+                                                    Nothing
 
-                                    Simulating ->
-                                        Scene3d.nothing
+                                        BlueBall _ _ ->
+                                            case gameModel.turn of
+                                                Blue ->
+                                                    Physics.centerOfMass body
 
-                                    GameOver _ ->
-                                        Scene3d.nothing
+                                                Red ->
+                                                    Nothing
+
+                                        _ ->
+                                            Nothing
                                 )
-                                    :: backgroundScenery
-                                    :: List.map
-                                        (bodyToEntity
-                                            model.boxMesh
-                                            model.boxMaterialRed
-                                            model.boxMaterialBlue
-                                            model.cylinderMesh
+                                gameModel.bodies
+                                |> Maybe.withDefault Point3d.origin
+                    in
+                    (case gameModel.stage of
+                        Aiming ->
+                            let
+                                arrowDirection =
+                                    (case gameModel.turn of
+                                        Red ->
+                                            Direction3d.negativeX
+
+                                        Blue ->
+                                            Direction3d.positiveX
+                                    )
+                                        |> Direction3d.rotateAround
+                                            (case gameModel.turn of
+                                                Red ->
+                                                    Direction3d.positiveY
+
+                                                Blue ->
+                                                    Direction3d.negativeY
+                                            )
+                                            (gameModel.elevantionRaw
+                                                |> String.toFloat
+                                                |> Maybe.withDefault 0
+                                                |> Angle.degrees
+                                            )
+                                        |> Direction3d.rotateAround
+                                            Direction3d.negativeZ
+                                            (gameModel.rotationRaw
+                                                |> String.toFloat
+                                                |> Maybe.withDefault 0
+                                                |> Angle.degrees
+                                            )
+
+                                arrowLength =
+                                    gameModel.forceRaw
+                                        |> String.toFloat
+                                        |> Maybe.map (\f -> f * 8)
+                                        |> Maybe.withDefault 100
+                                        |> Length.centimeters
+                            in
+                            Scene3d.group
+                                [ Scene3d.cylinder
+                                    (Scene3d.Material.matte Color.green)
+                                    (Cylinder3d.startingAt
+                                        ballCenter
+                                        arrowDirection
+                                        { radius = Length.centimeters 5
+                                        , length = arrowLength
+                                        }
+                                    )
+                                , Scene3d.cone
+                                    (Scene3d.Material.matte Color.green)
+                                    (Cone3d.startingAt
+                                        (ballCenter
+                                            |> Point3d.translateIn arrowDirection
+                                                arrowLength
                                         )
-                                        gameModel.bodies
-                            }
+                                        arrowDirection
+                                        { radius = Length.centimeters 15
+                                        , length = Length.centimeters 40
+                                        }
+                                    )
+                                ]
+
+                        Simulating ->
+                            Scene3d.nothing
+
+                        GameOver _ ->
+                            Scene3d.nothing
+                    )
+                        :: backgroundScenery
+                        :: List.map
+                            (bodyToEntity
+                                model.boxMesh
+                                model.boxMaterialRed
+                                model.boxMaterialBlue
+                                model.cylinderMesh
+                            )
+                            gameModel.bodies
+                }
+            ]
+        , case gameModel.stage of
+            GameOver winner ->
+                Html.div
+                    [ Html.Attributes.style "position" "fixed"
+                    , Html.Attributes.style "top" "30%"
+                    , Html.Attributes.style "width" "100vw"
+                    , Html.Attributes.style "text-align" "center"
+                    ]
+                    [ Html.h1
+                        [ Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                        , Html.Attributes.style "color" "white"
+                        , Html.Attributes.style "width" "100vw"
                         ]
-                    , case gameModel.stage of
-                        GameOver winner ->
-                            Html.div
-                                [ Html.Attributes.style "position" "fixed"
-                                , Html.Attributes.style "top" "30%"
-                                , Html.Attributes.style "width" "100vw"
-                                , Html.Attributes.style "text-align" "center"
-                                ]
-                                [ Html.h1
-                                    [ Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
-                                    , Html.Attributes.style "color" "white"
-                                    , Html.Attributes.style "width" "100vw"
-                                    ]
-                                    [ Html.text <|
-                                        if gameModel.myColor == winner then
-                                            "You won!"
+                        [ Html.text <|
+                            if gameModel.myColor == winner then
+                                "You won!"
 
-                                        else
-                                            "They won"
-                                    ]
-                                , Html.button
-                                    [ Html.Attributes.type_ "button"
-                                    , Html.Attributes.style "font-size" "1.25rem"
-                                    , Html.Attributes.style "border" "3px solid white"
-                                    , Html.Attributes.style "border-radius" "0.5rem"
-                                    , Html.Attributes.style "cursor" "pointer"
-                                    , Html.Attributes.style "color" "white"
-                                    , Html.Attributes.style "background-color" "cornflowerblue"
-                                    , Html.Events.onClick UserRequestedNewGame
-                                    ]
-                                    [ Html.text "New Game" ]
-                                ]
+                            else
+                                "They won"
+                        ]
+                    , Html.button
+                        [ Html.Attributes.type_ "button"
+                        , Html.Attributes.style "font-size" "1.25rem"
+                        , Html.Attributes.style "border" "3px solid white"
+                        , Html.Attributes.style "border-radius" "0.5rem"
+                        , Html.Attributes.style "cursor" "pointer"
+                        , Html.Attributes.style "color" "white"
+                        , Html.Attributes.style "background-color" "cornflowerblue"
+                        , Html.Events.onClick UserRequestedNewGame
+                        ]
+                        [ Html.text "New Game" ]
+                    ]
 
-                        _ ->
-                            Html.form
-                                [ Html.Attributes.style "position" "fixed"
-                                , Html.Attributes.style "display" "flex"
-                                , Html.Attributes.style "flex-direction" "column"
-                                , Html.Attributes.style "gap" "0.5rem"
-                                , Html.Events.onSubmit UserFiredBall
-                                , Html.Attributes.disabled (gameModel.stage /= Aiming)
-                                ]
-                                [ Html.input
-                                    [ Html.Attributes.placeholder "Elevation (Degrees)"
-                                    , Html.Attributes.style "font-size" "1.25rem"
-                                    , Html.Attributes.type_ "number"
-                                    , Html.Attributes.min "0"
-                                    , Html.Attributes.step "1"
-                                    , Html.Attributes.value gameModel.elevantionRaw
-                                    , Html.Events.onInput UserEnteredElevation
-                                    ]
-                                    []
-                                , Html.input
-                                    [ Html.Attributes.placeholder "Rotation (Degrees)"
-                                    , Html.Attributes.style "font-size" "1.25rem"
-                                    , Html.Attributes.type_ "number"
-                                    , Html.Attributes.step "1"
-                                    , Html.Attributes.value gameModel.rotationRaw
-                                    , Html.Events.onInput UserEnteredRotation
-                                    ]
-                                    []
-                                , Html.input
-                                    [ Html.Attributes.placeholder "Force (Meganewtons)"
-                                    , Html.Attributes.style "font-size" "1.25rem"
-                                    , Html.Attributes.type_ "number"
-                                    , Html.Attributes.min "0"
-                                    , Html.Attributes.step "1"
-                                    , Html.Attributes.max "80"
-                                    , Html.Attributes.value gameModel.forceRaw
-                                    , Html.Events.onInput UserEnteredForce
-                                    ]
-                                    []
-                                , Html.button
-                                    [ Html.Attributes.type_ "submit"
-                                    , Html.Attributes.style "font-size" "1.25rem"
-                                    , Html.Attributes.style "border" "3px solid white"
-                                    , Html.Attributes.style "border-radius" "0.5rem"
-                                    , Html.Attributes.style "cursor" "pointer"
-                                    , Html.Attributes.style "color" "white"
-                                    , Html.Attributes.style "background-color" <|
-                                        if gameModel.turn == gameModel.myColor then
-                                            turnToCssColor gameModel.myColor
-
-                                        else
-                                            "rgba(0, 0, 0, 0.75)"
-                                    ]
-                                    [ Html.text <|
-                                        if gameModel.turn == gameModel.myColor then
-                                            "Fire!"
-
-                                        else
-                                            "Wait"
-                                    ]
-                                , Html.p
-                                    [ Html.Attributes.style "color" "white"
-                                    , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
-                                    , Html.Attributes.style "padding" "0.25rem"
-                                    , Html.Attributes.style "text-align" "center"
-                                    , Html.Attributes.style "margin" "0"
-                                    ]
-                                    [ Html.text <|
-                                        if gameModel.myColor == gameModel.turn then
-                                            "Your turn"
-
-                                        else
-                                            "Their turn"
-                                    ]
-                                , Html.p
-                                    [ Html.Attributes.style "color" "white"
-                                    , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
-                                    , Html.Attributes.style "padding" "0.25rem"
-                                    , Html.Attributes.style "text-align" "center"
-                                    , Html.Attributes.style "margin" "0"
-                                    ]
-                                    [ Html.text <|
-                                        ("Towers remaining: "
-                                            ++ (String.fromInt <|
-                                                    if gameModel.myColor == Red then
-                                                        gameModel.redTowersRemaining
-
-                                                    else
-                                                        gameModel.blueTowersRemaining
-                                               )
-                                        )
-                                    ]
-                                , case gameModel.opponentDisconnected of
-                                    Nothing ->
-                                        Html.text ""
-
-                                    Just timeToReconnect ->
-                                        Html.p
-                                            [ Html.Attributes.style "color" "white"
-                                            , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
-                                            , Html.Attributes.style "padding" "0.25rem"
-                                            , Html.Attributes.style "text-align" "center"
-                                            , Html.Attributes.style "margin" "0"
-                                            ]
-                                            [ timeToReconnect
-                                                |> Duration.inSeconds
-                                                |> floor
-                                                |> String.fromInt
-                                                |> (\s -> "Opponent disconnect: " ++ s ++ "s")
-                                                |> Html.text
-                                            ]
-                                ]
-                    , Html.input
-                        [ Html.Attributes.style "position" "fixed"
-                        , Html.Attributes.style "bottom" "2rem"
-                        , Html.Attributes.type_ "range"
+            _ ->
+                Html.form
+                    [ Html.Attributes.style "position" "fixed"
+                    , Html.Attributes.style "display" "flex"
+                    , Html.Attributes.style "flex-direction" "column"
+                    , Html.Attributes.style "gap" "0.5rem"
+                    , Html.Events.onSubmit UserFiredBall
+                    , Html.Attributes.disabled (gameModel.stage /= Aiming)
+                    ]
+                    [ Html.input
+                        [ Html.Attributes.placeholder "Elevation (Degrees)"
+                        , Html.Attributes.style "font-size" "1.25rem"
+                        , Html.Attributes.type_ "number"
                         , Html.Attributes.min "0"
-                        , Html.Attributes.max "360"
                         , Html.Attributes.step "1"
-                        , Html.Attributes.value (String.fromFloat gameModel.cameraRotation)
-                        , Html.Events.onInput UserRotatedCamera
+                        , Html.Attributes.value gameModel.elevantionRaw
+                        , Html.Events.onInput UserEnteredElevation
                         ]
                         []
+                    , Html.input
+                        [ Html.Attributes.placeholder "Rotation (Degrees)"
+                        , Html.Attributes.style "font-size" "1.25rem"
+                        , Html.Attributes.type_ "number"
+                        , Html.Attributes.step "1"
+                        , Html.Attributes.value gameModel.rotationRaw
+                        , Html.Events.onInput UserEnteredRotation
+                        ]
+                        []
+                    , Html.input
+                        [ Html.Attributes.placeholder "Force (Meganewtons)"
+                        , Html.Attributes.style "font-size" "1.25rem"
+                        , Html.Attributes.type_ "number"
+                        , Html.Attributes.min "0"
+                        , Html.Attributes.step "1"
+                        , Html.Attributes.max "80"
+                        , Html.Attributes.value gameModel.forceRaw
+                        , Html.Events.onInput UserEnteredForce
+                        ]
+                        []
+                    , Html.button
+                        [ Html.Attributes.type_ "submit"
+                        , Html.Attributes.style "font-size" "1.25rem"
+                        , Html.Attributes.style "border" "3px solid white"
+                        , Html.Attributes.style "border-radius" "0.5rem"
+                        , Html.Attributes.style "cursor" "pointer"
+                        , Html.Attributes.style "color" "white"
+                        , Html.Attributes.style "background-color" <|
+                            if gameModel.turn == gameModel.myColor then
+                                turnToCssColor gameModel.myColor
+
+                            else
+                                "rgba(0, 0, 0, 0.75)"
+                        ]
+                        [ Html.text <|
+                            if gameModel.turn == gameModel.myColor then
+                                "Fire!"
+
+                            else
+                                "Wait"
+                        ]
+                    , Html.p
+                        [ Html.Attributes.style "color" "white"
+                        , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                        , Html.Attributes.style "padding" "0.25rem"
+                        , Html.Attributes.style "text-align" "center"
+                        , Html.Attributes.style "margin" "0"
+                        ]
+                        [ Html.text <|
+                            if gameModel.myColor == gameModel.turn then
+                                "Your turn"
+
+                            else
+                                "Their turn"
+                        ]
+                    , Html.p
+                        [ Html.Attributes.style "color" "white"
+                        , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                        , Html.Attributes.style "padding" "0.25rem"
+                        , Html.Attributes.style "text-align" "center"
+                        , Html.Attributes.style "margin" "0"
+                        ]
+                        [ Html.text <|
+                            ("Towers remaining: "
+                                ++ (String.fromInt <|
+                                        if gameModel.myColor == Red then
+                                            gameModel.redTowersRemaining
+
+                                        else
+                                            gameModel.blueTowersRemaining
+                                   )
+                            )
+                        ]
+                    , case gameModel.opponentDisconnected of
+                        Nothing ->
+                            Html.text ""
+
+                        Just timeToReconnect ->
+                            Html.p
+                                [ Html.Attributes.style "color" "white"
+                                , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                                , Html.Attributes.style "padding" "0.25rem"
+                                , Html.Attributes.style "text-align" "center"
+                                , Html.Attributes.style "margin" "0"
+                                ]
+                                [ timeToReconnect
+                                    |> Duration.inSeconds
+                                    |> floor
+                                    |> String.fromInt
+                                    |> (\s -> "Opponent disconnect: " ++ s ++ "s")
+                                    |> Html.text
+                                ]
                     ]
-    }
+        , Html.input
+            [ Html.Attributes.style "position" "fixed"
+            , Html.Attributes.style "bottom" "2rem"
+            , Html.Attributes.type_ "range"
+            , Html.Attributes.min "0"
+            , Html.Attributes.max "360"
+            , Html.Attributes.step "1"
+            , Html.Attributes.value (String.fromFloat gameModel.cameraRotation)
+            , Html.Events.onInput UserRotatedCamera
+            ]
+            []
+        ]
 
 
 turnToCssColor turn =
