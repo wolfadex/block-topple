@@ -13,11 +13,10 @@ node = "24"
 
 
 [tasks.dev]
-# run = "run-pty run-pty.json"
-run = "lamdera live"
+run = "run-pty run-pty.json"
 
 [tasks.dev-elm]
-run = "elm-watch hot"
+run = "lamdera live"
 
 [tasks.dev-css]
 run = "css-in-elm watch public/styles.css src/Css.elm"

@@ -63,7 +63,7 @@ type alias FrontendModel =
 
 
 type Page
-    = Home String
+    = Home String Bool
     | Waiting String
     | InGame GameFrontend
 
@@ -151,6 +151,12 @@ type FrontendMsg
     | BoxRedTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | BoxBlueTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | CylinderMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
+      --
+    | UserChosePlayWithStranger
+    | UserChoseHostFriend
+    | UserChoseJoinFriend
+    | UserAbandonedWaiting
+      --
     | GameMessage GameMsg
 
 
@@ -166,6 +172,10 @@ type GameMsg
 
 type ToBackend
     = Fire Float Float Float
+    | PlayWithStranger
+    | HostFriend
+    | JoinFriend String
+    | AbandonWaiting
 
 
 
@@ -188,6 +198,9 @@ type ToFrontend
     | OtherPlayerFired Float Float Float
     | OpponentDisconnected
     | OpponentConnected
+    | BeginWaitingForStranger
+    | BeginWaitingForFriend String
+    | UnknownJoinCode
 
 
 type alias GameRejoin =

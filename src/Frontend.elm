@@ -11,6 +11,7 @@ import Browser.Navigation
 import Camera3d exposing (Camera3d)
 import Color exposing (Color)
 import Cone3d exposing (Cone3d)
+import Css
 import Cylinder3d exposing (Cylinder3d)
 import Dict
 import Direction3d
@@ -69,10 +70,10 @@ urlToPage url =
     in
     case Dict.get "g" appUrl.queryParameters of
         Just (gameToJoin :: _) ->
-            Home gameToJoin
+            Home gameToJoin False
 
         _ ->
-            Home ""
+            Home "" False
 
 
 init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
@@ -136,7 +137,7 @@ subscriptions model =
         , let
             doTick =
                 case model.page of
-                    Home _ ->
+                    Home _ _ ->
                         False
 
                     Waiting _ ->
@@ -152,11 +153,6 @@ subscriptions model =
           else
             Sub.none
         ]
-
-
-noCmd : model -> ( model, Cmd FrontendMsg )
-noCmd model =
-    ( model, Cmd.none )
 
 
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
@@ -178,40 +174,94 @@ update msg model =
             ( model, Cmd.none )
 
         Resize width height ->
-            { model | dimensions = ( Pixels.int width, Pixels.int height ) }
-                |> noCmd
+            ( { model | dimensions = ( Pixels.int width, Pixels.int height ) }
+            , Cmd.none
+            )
 
+        --
         BoxMeshLoaded (Err err) ->
             Debug.todo (Debug.toString err)
 
         BoxMeshLoaded (Ok boxMesh) ->
-            { model | boxMesh = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
-                |> noCmd
+            ( { model | boxMesh = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
+            , Cmd.none
+            )
 
         BoxRedTextureLoaded (Err err) ->
             Debug.todo (Debug.toString err)
 
         BoxRedTextureLoaded (Ok texture) ->
-            { model | boxMaterialRed = Just (Scene3d.Material.texturedMatte texture) }
-                |> noCmd
+            ( { model | boxMaterialRed = Just (Scene3d.Material.texturedMatte texture) }
+            , Cmd.none
+            )
 
         BoxBlueTextureLoaded (Err err) ->
             Debug.todo (Debug.toString err)
 
         BoxBlueTextureLoaded (Ok texture) ->
-            { model | boxMaterialBlue = Just (Scene3d.Material.texturedMatte texture) }
-                |> noCmd
+            ( { model | boxMaterialBlue = Just (Scene3d.Material.texturedMatte texture) }
+            , Cmd.none
+            )
 
         CylinderMeshLoaded (Err err) ->
             Debug.todo (Debug.toString err)
 
         CylinderMeshLoaded (Ok cylinderMesh) ->
-            { model | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh ) }
-                |> noCmd
+            ( { model | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh ) }
+            , Cmd.none
+            )
 
+        --
+        UserChosePlayWithStranger ->
+            case model.page of
+                Home _ _ ->
+                    ( model, Lamdera.sendToBackend PlayWithStranger )
+
+                Waiting _ ->
+                    ( model, Cmd.none )
+
+                InGame _ ->
+                    ( model, Cmd.none )
+
+        UserChoseHostFriend ->
+            case model.page of
+                Home _ _ ->
+                    ( model, Lamdera.sendToBackend HostFriend )
+
+                Waiting _ ->
+                    ( model, Cmd.none )
+
+                InGame _ ->
+                    ( model, Cmd.none )
+
+        UserChoseJoinFriend ->
+            case model.page of
+                Home joinCode _ ->
+                    ( { model | page = Home joinCode False }
+                    , Lamdera.sendToBackend (JoinFriend joinCode)
+                    )
+
+                Waiting _ ->
+                    ( model, Cmd.none )
+
+                InGame _ ->
+                    ( model, Cmd.none )
+
+        UserAbandonedWaiting ->
+            case model.page of
+                Home _ _ ->
+                    ( model, Cmd.none )
+
+                Waiting _ ->
+                    ( { model | page = Home "" False }, Lamdera.sendToBackend AbandonWaiting )
+
+                InGame _ ->
+                    ( model, Cmd.none )
+
+        --
         GameMessage gameMsg ->
             case model.page of
-                Home _ ->
+                Home _ _ ->
                     ( model, Cmd.none )
 
                 Waiting _ ->
@@ -250,16 +300,19 @@ updateGame msg model =
                         ( { model | opponentDisconnected = Just (opponentDisconnected |> Quantity.minus delta) }, Cmd.none )
 
         UserEnteredElevation angle ->
-            { model | elevantionRaw = angle }
-                |> noCmd
+            ( { model | elevantionRaw = angle }
+            , Cmd.none
+            )
 
         UserEnteredRotation angle ->
-            { model | rotationRaw = angle }
-                |> noCmd
+            ( { model | rotationRaw = angle }
+            , Cmd.none
+            )
 
         UserEnteredForce force ->
-            { model | forceRaw = force }
-                |> noCmd
+            ( { model | forceRaw = force }
+            , Cmd.none
+            )
 
         UserFiredBall ->
             if model.myColor == model.turn then
@@ -281,13 +334,14 @@ updateGame msg model =
                 ( model, Cmd.none )
 
         UserRotatedCamera cameraRotation ->
-            { model
+            ( { model
                 | cameraRotation =
                     cameraRotation
                         |> String.toFloat
                         |> Maybe.withDefault model.cameraRotation
-            }
-                |> noCmd
+              }
+            , Cmd.none
+            )
 
 
 fireBall : Float -> Float -> Float -> GameFrontend -> GameFrontend
@@ -482,6 +536,36 @@ eyePoint =
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
     case msg of
+        BeginWaitingForStranger ->
+            ( { model
+                | page = Waiting ""
+              }
+            , Cmd.none
+            )
+
+        BeginWaitingForFriend gameId ->
+            ( { model
+                | page = Waiting ("Share this game code with your friend: " ++ gameId)
+              }
+            , Cmd.none
+            )
+
+        UnknownJoinCode ->
+            let
+                joinCode =
+                    case model.page of
+                        Home jc _ ->
+                            jc
+
+                        _ ->
+                            ""
+            in
+            ( { model
+                | page = Home joinCode True
+              }
+            , Cmd.none
+            )
+
         GameStarted myColor ->
             let
                 ( blueTowers, redTowers ) =
@@ -555,7 +639,7 @@ updateFromBackend msg model =
 
         TurnChange changes ->
             case model.page of
-                Home _ ->
+                Home _ _ ->
                     Debug.todo ""
 
                 Waiting _ ->
@@ -580,7 +664,7 @@ updateFromBackend msg model =
 
         OtherPlayerFired elevationF rotationF forceF ->
             case model.page of
-                Home _ ->
+                Home _ _ ->
                     Debug.todo ""
 
                 Waiting _ ->
@@ -593,7 +677,7 @@ updateFromBackend msg model =
 
         OpponentDisconnected ->
             case model.page of
-                Home _ ->
+                Home _ _ ->
                     ( model, Cmd.none )
 
                 Waiting _ ->
@@ -604,7 +688,7 @@ updateFromBackend msg model =
 
         OpponentConnected ->
             case model.page of
-                Home _ ->
+                Home _ _ ->
                     ( model, Cmd.none )
 
                 Waiting _ ->
@@ -627,8 +711,8 @@ view model =
     { title = "Block Topple"
     , body =
         case model.page of
-            Home gameToJoin ->
-                viewHome gameToJoin
+            Home gameToJoin joinError ->
+                viewHome gameToJoin joinError
 
             Waiting additionalMessage ->
                 viewWaiting additionalMessage
@@ -638,27 +722,42 @@ view model =
     }
 
 
-viewHome : String -> List (Html FrontendMsg)
-viewHome gameToJoin =
-    [ Html.h1 [] [ Html.text "Block Topple" ]
-    , Html.button
-        [ Html.Attributes.type_ "button" ]
-        [ Html.text "Play with a stranger" ]
-    , Html.button
-        [ Html.Attributes.type_ "button" ]
-        [ Html.text "Play with a friend" ]
-    , Html.form
-        []
-        [ Html.label
-            []
-            [ Html.span [] [ Html.text "Game to join" ]
-            , Html.input
-                []
-                []
-            ]
+viewHome : String -> Bool -> List (Html FrontendMsg)
+viewHome gameToJoin joinError =
+    [ Html.div
+        [ Css.home ]
+        [ Html.h1 [] [ Html.text "Block Topple" ]
         , Html.button
-            [ Html.Attributes.type_ "submit" ]
-            [ Html.text "Join" ]
+            [ Html.Attributes.type_ "button"
+            , Html.Events.onClick UserChosePlayWithStranger
+            ]
+            [ Html.text "Play with a stranger" ]
+        , Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Events.onClick UserChoseHostFriend
+            ]
+            [ Html.text "Host a friend" ]
+        , Html.form
+            [ Css.joinForm
+            , Html.Events.onSubmit UserChoseJoinFriend
+            ]
+            [ Html.label
+                []
+                [ Html.span [] [ Html.text "Game to join" ]
+                , Html.input
+                    []
+                    []
+                ]
+            , Html.button
+                [ Html.Attributes.type_ "submit" ]
+                [ Html.text "Join a friend" ]
+            ]
+        , if joinError then
+            Html.p []
+                [ Html.text "I wasn't able to find that game. Pleae double check that your friend gave you the right code, or try having them get a new code." ]
+
+          else
+            Html.text ""
         ]
     ]
 
@@ -666,13 +765,15 @@ viewHome gameToJoin =
 viewWaiting : String -> List (Html FrontendMsg)
 viewWaiting additionalMessage =
     [ Html.div
-        [ Html.Attributes.style "position" "fixed"
-        , Html.Attributes.style "left" "50%"
-        , Html.Attributes.style "top" "50%"
-        , Html.Attributes.style "transform" "translate(-50%, -50%)"
+        [ Css.waiting
         ]
         [ Html.p [] [ Html.text additionalMessage ]
         , Html.p [] [ Html.text "waiting for another player ..." ]
+        , Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Events.onClick UserAbandonedWaiting
+            ]
+            [ Html.text "Main menu" ]
         ]
     ]
 

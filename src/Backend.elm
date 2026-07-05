@@ -33,6 +33,7 @@ import Plane3d
 import Point2d
 import Point3d exposing (Point3d)
 import Process
+import Proquint
 import Quantity exposing (Quantity)
 import Random
 import Rectangle2d
@@ -140,13 +141,6 @@ update msg model =
                         )
 
             else
-                -- case model.waiting of
-                --     Nothing ->
-                --         ( { model | waiting = Just sessionId }
-                --         , Cmd.none
-                --         )
-                --     Just waitingId ->
-                --         startMatch sessionId waitingId model
                 ( model, Cmd.none )
 
         OnDisconnect sessionId clientId ->
@@ -414,6 +408,61 @@ updateFromFrontend sessionId clientId msg model =
                 Nothing ->
                     Cmd.none
             )
+
+        PlayWithStranger ->
+            case model.waiting of
+                Nothing ->
+                    ( { model | waiting = Just sessionId }
+                    , Lamdera.sendToFrontend sessionId BeginWaitingForStranger
+                    )
+
+                Just waitingId ->
+                    startMatch sessionId waitingId model
+
+        HostFriend ->
+            let
+                ( gameId, seed ) =
+                    Random.step
+                        (Random.map Proquint.toString
+                            Proquint.randomGenerator
+                        )
+                        model.seed
+            in
+            ( { model
+                | seed = seed
+                , waitingForFriend = SeqDict.insert gameId sessionId model.waitingForFriend
+              }
+            , Lamdera.sendToFrontend sessionId (BeginWaitingForFriend gameId)
+            )
+
+        JoinFriend joinCode ->
+            case SeqDict.get joinCode model.waitingForFriend of
+                Nothing ->
+                    ( model
+                    , Lamdera.sendToFrontend sessionId UnknownJoinCode
+                    )
+
+                Just friendSessionId ->
+                    startMatch sessionId friendSessionId model
+
+        AbandonWaiting ->
+            case model.waiting of
+                Just waitingId ->
+                    if waitingId == sessionId then
+                        ( { model | waiting = Nothing }, Cmd.none )
+
+                    else if SeqDict.member sessionId model.waitingForFriend then
+                        ( { model | waitingForFriend = SeqDict.remove sessionId model.waitingForFriend }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+                Nothing ->
+                    if SeqDict.member sessionId model.waitingForFriend then
+                        ( { model | waitingForFriend = SeqDict.remove sessionId model.waitingForFriend }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
 
 
 runTurn : Game -> Game
