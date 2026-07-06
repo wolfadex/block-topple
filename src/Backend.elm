@@ -13,6 +13,7 @@ import Cone3d exposing (Cone3d)
 import Cylinder3d exposing (Cylinder3d)
 import Direction3d
 import Duration exposing (Duration)
+import Env
 import Force exposing (Force)
 import Frame3d
 import Html exposing (Html)
@@ -69,6 +70,7 @@ init =
       , hasLeft = SeqSet.empty
       , seed = Random.initialSeed 0
       , waitingForFriend = SeqDict.empty
+      , adminClient = Nothing
       }
     , Random.independentSeed
         |> Random.generate SeedInitialized
@@ -436,14 +438,20 @@ updateFromFrontend sessionId clientId msg model =
             )
 
         JoinFriend joinCode ->
-            case SeqDict.get joinCode model.waitingForFriend of
-                Nothing ->
-                    ( model
-                    , Lamdera.sendToFrontend sessionId UnknownJoinCode
-                    )
+            if joinCode == Env.adminPassword then
+                ( { model | adminClient = Just clientId }
+                , Lamdera.sendToFrontend clientId AdminLoggedIn
+                )
 
-                Just friendSessionId ->
-                    startMatch sessionId friendSessionId model
+            else
+                case SeqDict.get joinCode model.waitingForFriend of
+                    Nothing ->
+                        ( model
+                        , Lamdera.sendToFrontend sessionId UnknownJoinCode
+                        )
+
+                    Just friendSessionId ->
+                        startMatch sessionId friendSessionId model
 
         AbandonWaiting ->
             case model.waiting of

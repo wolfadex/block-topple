@@ -66,6 +66,8 @@ type Page
     = Home String Bool
     | Waiting String
     | InGame GameFrontend
+      --
+    | AdminView
 
 
 type alias GameFrontend =
@@ -93,6 +95,7 @@ type alias BackendModel =
     , hasLeft : SeqSet SessionId
     , seed : Random.Seed
     , waitingForFriend : SeqDict String SessionId
+    , adminClient : Maybe Lamdera.ClientId
     }
 
 
@@ -154,6 +157,7 @@ type FrontendMsg
       --
     | UserChosePlayWithStranger
     | UserChoseHostFriend
+    | UserChangedJoinCode String
     | UserChoseJoinFriend
     | UserAbandonedWaiting
       --
@@ -201,6 +205,7 @@ type ToFrontend
     | BeginWaitingForStranger
     | BeginWaitingForFriend String
     | UnknownJoinCode
+    | AdminLoggedIn
 
 
 type alias GameRejoin =

@@ -137,6 +137,9 @@ subscriptions model =
         , let
             doTick =
                 case model.page of
+                    AdminView ->
+                        False
+
                     Home _ _ ->
                         False
 
@@ -214,6 +217,9 @@ update msg model =
         --
         UserChosePlayWithStranger ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home _ _ ->
                     ( model, Lamdera.sendToBackend PlayWithStranger )
 
@@ -225,6 +231,9 @@ update msg model =
 
         UserChoseHostFriend ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home _ _ ->
                     ( model, Lamdera.sendToBackend HostFriend )
 
@@ -234,8 +243,27 @@ update msg model =
                 InGame _ ->
                     ( model, Cmd.none )
 
+        UserChangedJoinCode joinCode ->
+            case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
+                Home _ _ ->
+                    ( { model | page = Home joinCode False }
+                    , Cmd.none
+                    )
+
+                Waiting _ ->
+                    ( model, Cmd.none )
+
+                InGame _ ->
+                    ( model, Cmd.none )
+
         UserChoseJoinFriend ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home joinCode _ ->
                     ( { model | page = Home joinCode False }
                     , Lamdera.sendToBackend (JoinFriend joinCode)
@@ -249,6 +277,9 @@ update msg model =
 
         UserAbandonedWaiting ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home _ _ ->
                     ( model, Cmd.none )
 
@@ -261,6 +292,9 @@ update msg model =
         --
         GameMessage gameMsg ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home _ _ ->
                     ( model, Cmd.none )
 
@@ -536,6 +570,11 @@ eyePoint =
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
     case msg of
+        AdminLoggedIn ->
+            ( { model | page = AdminView }
+            , Cmd.none
+            )
+
         BeginWaitingForStranger ->
             ( { model
                 | page = Waiting ""
@@ -639,6 +678,9 @@ updateFromBackend msg model =
 
         TurnChange changes ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home _ _ ->
                     Debug.todo ""
 
@@ -664,6 +706,9 @@ updateFromBackend msg model =
 
         OtherPlayerFired elevationF rotationF forceF ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home _ _ ->
                     Debug.todo ""
 
@@ -677,6 +722,9 @@ updateFromBackend msg model =
 
         OpponentDisconnected ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home _ _ ->
                     ( model, Cmd.none )
 
@@ -688,6 +736,9 @@ updateFromBackend msg model =
 
         OpponentConnected ->
             case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
                 Home _ _ ->
                     ( model, Cmd.none )
 
@@ -711,6 +762,9 @@ view model =
     { title = "Block Topple"
     , body =
         case model.page of
+            AdminView ->
+                viewAdmin model
+
             Home gameToJoin joinError ->
                 viewHome gameToJoin joinError
 
@@ -720,6 +774,12 @@ view model =
             InGame gameModel ->
                 viewGame model gameModel
     }
+
+
+viewAdmin : FrontendModel -> List (Html FrontendMsg)
+viewAdmin model =
+    [ Html.h1 [] [ Html.text "Block Topple - Admin" ]
+    ]
 
 
 viewHome : String -> Bool -> List (Html FrontendMsg)
@@ -745,7 +805,9 @@ viewHome gameToJoin joinError =
                 []
                 [ Html.span [] [ Html.text "Game to join" ]
                 , Html.input
-                    []
+                    [ Html.Attributes.value gameToJoin
+                    , Html.Events.onInput UserChangedJoinCode
+                    ]
                     []
                 ]
             , Html.button
