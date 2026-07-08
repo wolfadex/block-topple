@@ -302,70 +302,78 @@ update msg model =
                     ( model, Cmd.none )
 
                 InGame gameModel ->
-                    updateGame gameMsg gameModel
-                        |> Tuple.mapFirst (\gm -> { model | page = InGame gm })
+                    updateGame model gameMsg gameModel
 
 
-updateGame : GameMsg -> GameFrontend -> ( GameFrontend, Cmd FrontendMsg )
-updateGame msg model =
+updateGame : FrontendModel -> GameMsg -> GameFrontend -> ( FrontendModel, Cmd FrontendMsg )
+updateGame feModel msg model =
     case msg of
         UserRequestedNewGame ->
             ( model, Browser.Navigation.reload )
+                |> Tuple.mapFirst (\gm -> { feModel | page = InGame gm })
+
+        UserRequestedLeaveMatch ->
+            ( { feModel | page = Home "" False }, Lamdera.sendToBackend LeaveMatchRequested )
 
         Tick delta ->
-            if model.stage == Simulating then
-                let
-                    m =
-                        Timestep.advance simulateStep delta model
-                in
-                case model.opponentDisconnected of
-                    Nothing ->
-                        ( m, Cmd.none )
+            Tuple.mapFirst (\gm -> { feModel | page = InGame gm }) <|
+                if model.stage == Simulating then
+                    let
+                        m =
+                            Timestep.advance simulateStep delta model
+                    in
+                    case model.opponentDisconnected of
+                        Nothing ->
+                            ( m, Cmd.none )
 
-                    Just opponentDisconnected ->
-                        ( { m | opponentDisconnected = Just (opponentDisconnected |> Quantity.minus delta) }, Cmd.none )
+                        Just opponentDisconnected ->
+                            ( { m | opponentDisconnected = Just (opponentDisconnected |> Quantity.minus delta) }, Cmd.none )
 
-            else
-                case model.opponentDisconnected of
-                    Nothing ->
-                        ( model, Cmd.none )
+                else
+                    case model.opponentDisconnected of
+                        Nothing ->
+                            ( model, Cmd.none )
 
-                    Just opponentDisconnected ->
-                        ( { model | opponentDisconnected = Just (opponentDisconnected |> Quantity.minus delta) }, Cmd.none )
+                        Just opponentDisconnected ->
+                            ( { model | opponentDisconnected = Just (opponentDisconnected |> Quantity.minus delta) }, Cmd.none )
 
         UserEnteredElevation angle ->
             ( { model | elevantionRaw = angle }
             , Cmd.none
             )
+                |> Tuple.mapFirst (\gm -> { feModel | page = InGame gm })
 
         UserEnteredRotation angle ->
             ( { model | rotationRaw = angle }
             , Cmd.none
             )
+                |> Tuple.mapFirst (\gm -> { feModel | page = InGame gm })
 
         UserEnteredForce force ->
             ( { model | forceRaw = force }
             , Cmd.none
             )
+                |> Tuple.mapFirst (\gm -> { feModel | page = InGame gm })
 
         UserFiredBall ->
-            if model.myColor == model.turn then
-                case
-                    ( String.toFloat model.elevantionRaw
-                    , String.toFloat model.rotationRaw
-                    , String.toFloat model.forceRaw
-                    )
-                of
-                    ( Just elevationF, Just rotationF, Just forceF ) ->
-                        ( fireBall elevationF rotationF forceF model
-                        , Lamdera.sendToBackend (Fire elevationF rotationF forceF)
+            Tuple.mapFirst (\gm -> { feModel | page = InGame gm }) <|
+                if model.myColor == model.turn then
+                    case
+                        ( String.toFloat model.elevantionRaw
+                        , String.toFloat model.rotationRaw
+                        , String.toFloat model.forceRaw
                         )
+                    of
+                        ( Just elevationF, Just rotationF, Just forceF ) ->
+                            ( fireBall elevationF rotationF forceF model
+                            , Lamdera.sendToBackend (Fire elevationF rotationF forceF)
+                            )
 
-                    _ ->
-                        ( model, Cmd.none )
+                        _ ->
+                            ( model, Cmd.none )
 
-            else
-                ( model, Cmd.none )
+                else
+                    ( model, Cmd.none )
 
         UserRotatedCamera cameraRotation ->
             ( { model
@@ -376,6 +384,7 @@ updateGame msg model =
               }
             , Cmd.none
             )
+                |> Tuple.mapFirst (\gm -> { feModel | page = InGame gm })
 
 
 fireBall : Float -> Float -> Float -> GameFrontend -> GameFrontend
@@ -748,6 +757,21 @@ updateFromBackend msg model =
                 InGame game ->
                     ( { model | page = InGame { game | opponentDisconnected = Nothing } }, Cmd.none )
 
+        OpponentLeft ->
+            case model.page of
+                AdminView ->
+                    ( model, Cmd.none )
+
+                Home _ _ ->
+                    ( model, Cmd.none )
+
+                Waiting _ ->
+                    ( model, Cmd.none )
+
+                InGame game ->
+                    -- TODO: Add a message of some kind here
+                    ( { model | page = Home "" False }, Cmd.none )
+
 
 initTimestep : Timestep
 initTimestep =
@@ -1039,7 +1063,14 @@ viewGame model gameModel =
                     , Html.button
                         [ Html.Attributes.type_ "submit"
                         , Html.Attributes.style "font-size" "1.25rem"
-                        , Html.Attributes.style "border" "3px solid white"
+                        , Html.Attributes.style "border-width" "2px"
+                        , Html.Attributes.style "border-style" "solid"
+                        , Html.Attributes.style "border-color" <|
+                            if gameModel.turn == gameModel.myColor then
+                                "white"
+
+                            else
+                                "rgba(0, 0, 0, 0.75)"
                         , Html.Attributes.style "border-radius" "0.5rem"
                         , Html.Attributes.style "cursor" "pointer"
                         , Html.Attributes.style "color" "white"
@@ -1059,7 +1090,7 @@ viewGame model gameModel =
                         ]
                     , Html.p
                         [ Html.Attributes.style "color" "white"
-                        , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                        , Html.Attributes.style "background-color" "rgba(70, 70, 70, 0.75)"
                         , Html.Attributes.style "padding" "0.25rem"
                         , Html.Attributes.style "text-align" "center"
                         , Html.Attributes.style "margin" "0"
@@ -1073,7 +1104,7 @@ viewGame model gameModel =
                         ]
                     , Html.p
                         [ Html.Attributes.style "color" "white"
-                        , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                        , Html.Attributes.style "background-color" "rgba(70, 70, 70, 0.75)"
                         , Html.Attributes.style "padding" "0.25rem"
                         , Html.Attributes.style "text-align" "center"
                         , Html.Attributes.style "margin" "0"
@@ -1108,6 +1139,18 @@ viewGame model gameModel =
                                     |> (\s -> "Opponent disconnect: " ++ s ++ "s")
                                     |> Html.text
                                 ]
+                    , Html.button
+                        [ Html.Attributes.type_ "button"
+                        , Html.Attributes.style "font-size" "1.25rem"
+                        , Html.Attributes.style "border" "2px solid white"
+                        , Html.Attributes.style "border-radius" "0.5rem"
+                        , Html.Attributes.style "cursor" "pointer"
+                        , Html.Attributes.style "color" "white"
+                        , Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+                        , Html.Events.onClick UserRequestedLeaveMatch
+                        ]
+                        [ Html.text "Leave match"
+                        ]
                     ]
         , Html.input
             [ Html.Attributes.style "position" "fixed"

@@ -472,6 +472,31 @@ updateFromFrontend sessionId clientId msg model =
                     else
                         ( model, Cmd.none )
 
+        LeaveMatchRequested ->
+            let
+                ( filteredRooms, maybeGame ) =
+                    listFilterFind
+                        (\( left, right, game ) ->
+                            if sessionId == left then
+                                Just right
+
+                            else if sessionId == right then
+                                Just left
+
+                            else
+                                Nothing
+                        )
+                        model.rooms
+            in
+            ( { model | rooms = filteredRooms }
+            , case maybeGame of
+                Nothing ->
+                    Cmd.none
+
+                Just otherPlayer ->
+                    Lamdera.sendToFrontend otherPlayer OpponentLeft
+            )
+
 
 runTurn : Game -> Game
 runTurn game =
@@ -618,3 +643,23 @@ listFindMap pred list =
 
                 Nothing ->
                     listFindMap pred rest
+
+
+listFilterFind : (a -> Maybe b) -> List a -> ( List a, Maybe b )
+listFilterFind pred list =
+    listFilterFindHelper pred list []
+
+
+listFilterFindHelper : (a -> Maybe b) -> List a -> List a -> ( List a, Maybe b )
+listFilterFindHelper pred toCheck checked =
+    case toCheck of
+        [] ->
+            ( checked, Nothing )
+
+        next :: rest ->
+            case pred next of
+                Just b ->
+                    ( checked ++ toCheck, Just b )
+
+                Nothing ->
+                    listFilterFindHelper pred rest (next :: checked)

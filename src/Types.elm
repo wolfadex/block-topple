@@ -172,6 +172,7 @@ type GameMsg
     | UserFiredBall
     | UserRotatedCamera String
     | UserRequestedNewGame
+    | UserRequestedLeaveMatch
 
 
 type ToBackend
@@ -180,6 +181,7 @@ type ToBackend
     | HostFriend
     | JoinFriend String
     | AbandonWaiting
+    | LeaveMatchRequested
 
 
 
@@ -202,6 +204,7 @@ type ToFrontend
     | OtherPlayerFired Float Float Float
     | OpponentDisconnected
     | OpponentConnected
+    | OpponentLeft
     | BeginWaitingForStranger
     | BeginWaitingForFriend String
     | UnknownJoinCode
