@@ -1,0 +1,16 @@
+This is a (likely incomplete) list of the people who have contributed to
+the elm-geometry package. If you submit a patch to this repository, please
+add your name to the end of this list!
+
+Ian Mackenzie <ian.e.mackenzie@gmail.com>
+Matthieu Pizenberg <matthieu.pizenberg@gmail.com> (intersections)
+Folkert de Vries <folkert@folkertdev.nl> (length parameterization, delaunay triangulation)
+Felix Scheinost <felix.scheinost@gmail.com> (Sphere3d)
+Jakub Hampl <kopomir@gmail.com> (convex hull, point in polygon)
+Dave Cameron <dave.bc@gmail.com> (centroids)
+Lalit Umbarkar <lalit.umbarkar9@gmail.com> (bounding box expand/offset)
+Sebastian Kazenbroot-Guppy <sebastian.kg@gmail.com> (circle-bbox intersections)
+Andrey Kuzmin <unsoundscapes@gmail.com> (arc midpoint, polygon centroid, interval distances for line segments, Cone3d)
+Suzanne Wood <suzanne.wood.03@gmail.com> (intersection of axis and sphere)
+Guilherme Riekes Belmonte <contact@belmonte.dev> (Ellipsoid3d, scaleTo and physics for Vector2d and Vector3d)
+Olaf Delgado-Friedrichs <olaf.delgado@gmail.com> (axis/triangle intersection)

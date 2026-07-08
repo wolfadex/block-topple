@@ -1,0 +1,134 @@
+module Physics.Constraint exposing
+    ( Constraint
+    , pointToPoint, hinge, distance, lock
+    )
+
+{-|
+
+@docs Constraint
+
+@docs pointToPoint, hinge, distance, lock
+
+-}
+
+import Axis3d exposing (Axis3d)
+import Direction3d
+import Frame3d exposing (Frame3d)
+import Internal.Constraint as Internal
+import Internal.Coordinates exposing (BodyCoordinates)
+import Length exposing (Length, Meters)
+import Physics.Types as Types
+import Point3d exposing (Point3d)
+
+
+{-| Limit the freedom of movement of two bodies relative to each other.
+
+Pass a `constrain` function in the [simulation config](Physics#Config). For example, to drag
+a body with the mouse, connect a mouse to a point on the box with
+[pointToPoint](#pointToPoint):
+
+    constrain id =
+        if id == "mouse" then
+            Just
+                (\otherId ->
+                    if otherId == "box" then
+                        [ pointToPoint Point3d.origin pointOnBox ]
+
+                    else
+                        []
+                )
+
+        else
+            Nothing
+
+Constraints are skipped unless at least one body is [dynamic](Physics-Body#dynamic).
+
+-}
+type alias Constraint =
+    Types.Constraint
+
+
+{-| Connect a point on the first body with a point on the second body.
+This doesn’t limit the freedom of rotation of two bodies.
+-}
+pointToPoint :
+    Point3d Meters BodyCoordinates
+    -> Point3d Meters BodyCoordinates
+    -> Constraint
+pointToPoint pivot1 pivot2 =
+    Internal.PointToPoint (Point3d.toMeters pivot1) (Point3d.toMeters pivot2)
+
+
+{-| Keep two bodies connected with each other and limit the freedom of rotation.
+Useful for e.g. connecting a window to a window frame, or to connect a wheel to a car.
+-}
+hinge :
+    Axis3d Meters BodyCoordinates
+    -> Axis3d Meters BodyCoordinates
+    -> Constraint
+hinge axis3d1 axis3d2 =
+    let
+        pivot1 =
+            Point3d.toMeters (Axis3d.originPoint axis3d1)
+
+        axis1 =
+            Direction3d.unwrap (Axis3d.direction axis3d1)
+
+        pivot2 =
+            Point3d.toMeters (Axis3d.originPoint axis3d2)
+
+        axis2 =
+            Direction3d.unwrap (Axis3d.direction axis3d2)
+    in
+    Internal.Hinge pivot1 axis1 pivot2 axis2
+
+
+{-| Keep two bodies connected with each other and remove all degrees of freedom between bodies.
+-}
+lock :
+    Frame3d Meters BodyCoordinates {}
+    -> Frame3d Meters BodyCoordinates {}
+    -> Constraint
+lock frame3d1 frame3d2 =
+    let
+        pivot1 =
+            Point3d.toMeters (Frame3d.originPoint frame3d1)
+
+        x1 =
+            Direction3d.unwrap (Frame3d.xDirection frame3d1)
+
+        y1 =
+            Direction3d.unwrap (Frame3d.yDirection frame3d1)
+
+        z1 =
+            if Frame3d.isRightHanded frame3d1 then
+                Direction3d.unwrap (Frame3d.zDirection frame3d1)
+
+            else
+                Direction3d.unwrap (Direction3d.reverse (Frame3d.zDirection frame3d1))
+
+        pivot2 =
+            Point3d.toMeters (Frame3d.originPoint frame3d2)
+
+        x2 =
+            Direction3d.unwrap (Frame3d.xDirection frame3d2)
+
+        y2 =
+            Direction3d.unwrap (Frame3d.yDirection frame3d2)
+
+        z2 =
+            if Frame3d.isRightHanded frame3d2 then
+                Direction3d.unwrap (Frame3d.zDirection frame3d2)
+
+            else
+                Direction3d.unwrap (Direction3d.reverse (Frame3d.zDirection frame3d2))
+    in
+    Internal.Lock pivot1 x1 y1 z1 pivot2 x2 y2 z2
+
+
+{-| Keep the centers of mass of two bodies at the constant distance
+from each other.
+-}
+distance : Length -> Constraint
+distance length =
+    Internal.Distance (Length.inMeters length)
