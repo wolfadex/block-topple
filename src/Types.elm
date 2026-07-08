@@ -457,7 +457,7 @@ initTower xOffset yOffset color =
                 }
       in
       ( Block (Cone cone) color
-      , physicsCone cone
+      , Physics.cone cone
             Physics.Material.wood
       )
     ]
@@ -625,63 +625,3 @@ countFallenTowers contacts =
                         total
             )
             ( 0, 0 )
-
-
-
---
-
-
-physicsCone : Cone3d Meters BodyCoordinates -> Physics.Material.Material Physics.Material.Dense -> Body
-physicsCone sourceCone material =
-    let
-        bottomCenter =
-            Cone3d.basePoint sourceCone
-
-        tip =
-            Cone3d.tipPoint sourceCone
-
-        radius =
-            Cone3d.radius sourceCone
-                |> Length.inMeters
-
-        bottom =
-            TriangularMesh.radial bottomCenter <|
-                Parameter1d.leading 12 <|
-                    \u ->
-                        let
-                            theta =
-                                2 * pi * u
-
-                            sinTheta =
-                                sin theta
-
-                            cosTheta =
-                                cos theta
-                        in
-                        bottomCenter
-                            |> Point3d.translateBy
-                                (Vector3d.unsafe { x = cosTheta * radius, y = -sinTheta * radius, z = 0 })
-
-        sides =
-            TriangularMesh.radial tip <|
-                Parameter1d.leading 12 <|
-                    \u ->
-                        let
-                            theta =
-                                2 * pi * u
-
-                            sinTheta =
-                                sin theta
-
-                            cosTheta =
-                                cos theta
-                        in
-                        bottomCenter
-                            |> Point3d.translateBy
-                                (Vector3d.unsafe { x = cosTheta * radius, y = sinTheta * radius, z = 0 })
-    in
-    Physics.dynamic
-        [ ( Physics.Shape.unsafeConvex (TriangularMesh.combine [ bottom, sides ])
-          , material
-          )
-        ]
