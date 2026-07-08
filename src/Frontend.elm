@@ -304,6 +304,10 @@ update msg model =
                 InGame gameModel ->
                     updateGame model gameMsg gameModel
 
+        --
+        Admin_ClickedClearAllMatches ->
+            ( model, Lamdera.sendToBackend Admin_ClearAllMatches )
+
 
 updateGame : FrontendModel -> GameMsg -> GameFrontend -> ( FrontendModel, Cmd FrontendMsg )
 updateGame feModel msg model =
@@ -579,11 +583,15 @@ eyePoint =
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
     case msg of
-        AdminLoggedIn ->
+        Admin_LoggedIn ->
             ( { model | page = AdminView }
             , Cmd.none
             )
 
+        Admin_ForcedReset ->
+            ( { model | page = Home "" False }, Cmd.none )
+
+        --
         BeginWaitingForStranger ->
             ( { model
                 | page = Waiting ""
@@ -803,6 +811,10 @@ view model =
 viewAdmin : FrontendModel -> List (Html FrontendMsg)
 viewAdmin model =
     [ Html.h1 [] [ Html.text "Block Topple - Admin" ]
+    , Html.button
+        [ Html.Events.onClick Admin_ClickedClearAllMatches
+        ]
+        [ Html.text "Clear all matches" ]
     ]
 
 

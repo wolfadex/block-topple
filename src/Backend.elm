@@ -440,7 +440,7 @@ updateFromFrontend sessionId clientId msg model =
         JoinFriend joinCode ->
             if joinCode == Env.adminPassword then
                 ( { model | adminClient = Just clientId }
-                , Lamdera.sendToFrontend clientId AdminLoggedIn
+                , Lamdera.sendToFrontend clientId Admin_LoggedIn
                 )
 
             else
@@ -496,6 +496,45 @@ updateFromFrontend sessionId clientId msg model =
                 Just otherPlayer ->
                     Lamdera.sendToFrontend otherPlayer OpponentLeft
             )
+
+        --
+        Admin_ClearAllMatches ->
+            case model.adminClient of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just adminId ->
+                    if adminId == clientId then
+                        ( { model
+                            | waiting = Nothing
+                            , rooms = []
+                            , hasLeft = SeqSet.empty
+                            , waitingForFriend = SeqDict.empty
+                          }
+                        , Cmd.batch
+                            ((case model.waiting of
+                                Nothing ->
+                                    Cmd.none
+
+                                Just waitingId ->
+                                    Lamdera.sendToFrontend waitingId Admin_ForcedReset
+                             )
+                                :: List.concatMap
+                                    (\( left, right, _ ) ->
+                                        [ Lamdera.sendToFrontend left Admin_ForcedReset
+                                        , Lamdera.sendToFrontend right Admin_ForcedReset
+                                        ]
+                                    )
+                                    model.rooms
+                                ++ SeqDict.foldl
+                                    (\_ friendId -> (::) (Lamdera.sendToFrontend friendId Admin_ForcedReset))
+                                    []
+                                    model.waitingForFriend
+                            )
+                        )
+
+                    else
+                        ( model, Cmd.none )
 
 
 runTurn : Game -> Game

@@ -161,6 +161,8 @@ type FrontendMsg
     | UserChoseJoinFriend
     | UserAbandonedWaiting
       --
+    | Admin_ClickedClearAllMatches
+      --
     | GameMessage GameMsg
 
 
@@ -182,6 +184,8 @@ type ToBackend
     | JoinFriend String
     | AbandonWaiting
     | LeaveMatchRequested
+      --
+    | Admin_ClearAllMatches
 
 
 
@@ -208,7 +212,9 @@ type ToFrontend
     | BeginWaitingForStranger
     | BeginWaitingForFriend String
     | UnknownJoinCode
-    | AdminLoggedIn
+      --
+    | Admin_LoggedIn
+    | Admin_ForcedReset
 
 
 type alias GameRejoin =
