@@ -160,7 +160,7 @@ subscriptions model =
 
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 update msg model =
-    case Debug.log "update" msg of
+    case msg of
         UrlClicked urlRequest ->
             case urlRequest of
                 Internal url ->
@@ -183,7 +183,8 @@ update msg model =
 
         --
         BoxMeshLoaded (Err err) ->
-            Debug.todo (Debug.toString err)
+            -- Debug.todo (Debug.toString err)
+            ( model, Cmd.none )
 
         BoxMeshLoaded (Ok boxMesh) ->
             ( { model | boxMesh = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
@@ -191,7 +192,8 @@ update msg model =
             )
 
         BoxRedTextureLoaded (Err err) ->
-            Debug.todo (Debug.toString err)
+            -- Debug.todo (Debug.toString err)
+            ( model, Cmd.none )
 
         BoxRedTextureLoaded (Ok texture) ->
             ( { model | boxMaterialRed = Just (Scene3d.Material.texturedMatte texture) }
@@ -199,7 +201,8 @@ update msg model =
             )
 
         BoxBlueTextureLoaded (Err err) ->
-            Debug.todo (Debug.toString err)
+            -- Debug.todo (Debug.toString err)
+            ( model, Cmd.none )
 
         BoxBlueTextureLoaded (Ok texture) ->
             ( { model | boxMaterialBlue = Just (Scene3d.Material.texturedMatte texture) }
@@ -207,7 +210,8 @@ update msg model =
             )
 
         CylinderMeshLoaded (Err err) ->
-            Debug.todo (Debug.toString err)
+            -- Debug.todo (Debug.toString err)
+            ( model, Cmd.none )
 
         CylinderMeshLoaded (Ok cylinderMesh) ->
             ( { model | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh ) }
@@ -581,7 +585,7 @@ eyePoint =
 
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
-    case Debug.log "updateFromBackend" msg of
+    case msg of
         Admin_LoggedIn ->
             ( { model | page = AdminView }
             , Cmd.none
@@ -722,10 +726,12 @@ updateFromBackend msg model =
                     ( model, Cmd.none )
 
                 Home _ _ ->
-                    Debug.todo ""
+                    -- [TODO]
+                    ( model, Cmd.none )
 
                 Waiting _ ->
-                    Debug.todo ""
+                    -- [TODO]
+                    ( model, Cmd.none )
 
                 InGame game ->
                     ( { model | page = InGame (fireBall elevationF rotationF forceF game) }
