@@ -160,7 +160,7 @@ subscriptions model =
 
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 update msg model =
-    case msg of
+    case Debug.log "update" msg of
         UrlClicked urlRequest ->
             case urlRequest of
                 Internal url ->
@@ -313,8 +313,7 @@ updateGame : FrontendModel -> GameMsg -> GameFrontend -> ( FrontendModel, Cmd Fr
 updateGame feModel msg model =
     case msg of
         UserRequestedNewGame ->
-            ( model, Browser.Navigation.reload )
-                |> Tuple.mapFirst (\gm -> { feModel | page = InGame gm })
+            ( { feModel | page = Home "" False }, Cmd.none )
 
         UserRequestedLeaveMatch ->
             ( { feModel | page = Home "" False }, Lamdera.sendToBackend LeaveMatchRequested )
@@ -582,7 +581,7 @@ eyePoint =
 
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
-    case msg of
+    case Debug.log "updateFromBackend" msg of
         Admin_LoggedIn ->
             ( { model | page = AdminView }
             , Cmd.none
@@ -695,15 +694,6 @@ updateFromBackend msg model =
 
         TurnChange changes ->
             case model.page of
-                AdminView ->
-                    ( model, Cmd.none )
-
-                Home _ _ ->
-                    Debug.todo ""
-
-                Waiting _ ->
-                    Debug.todo ""
-
                 InGame game ->
                     ( { model
                         | page =
@@ -713,13 +703,18 @@ updateFromBackend msg model =
                                     , prevBodies = changes.bodies
                                     , contacts = changes.contacts
                                     , turn = changes.turn
-                                    , stage = game.stage
+                                    , stage = changes.stage
                                     , elapsed = Duration.seconds 0
                                     , timestep = initTimestep
                                 }
                       }
                     , Cmd.none
                     )
+
+                _ ->
+                    -- [TODO]: We should send a message to the backend that
+                    -- the other person might be stuck in the game stil
+                    ( model, Cmd.none )
 
         OtherPlayerFired elevationF rotationF forceF ->
             case model.page of
