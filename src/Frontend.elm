@@ -87,6 +87,10 @@ init url key =
       , boxMaterialRed = Nothing
       , boxMaterialBlue = Nothing
       , cylinderMesh = Nothing
+
+      --
+      , boxMeshLetterA = Nothing
+      , boxMaterialRedLetterA = Nothing
       }
     , Cmd.batch
         [ Task.perform
@@ -114,6 +118,19 @@ loadBox =
             |> Task.attempt BoxRedTextureLoaded
         , Scene3d.Material.load "/assets/box_blue.png"
             |> Task.attempt BoxBlueTextureLoaded
+
+        --
+        , Http.get
+            { url = "/assets/box_letter_a.obj"
+            , expect =
+                Obj.Decode.expectObj BoxMeshLetterALoaded
+                    Length.meters
+                    (Obj.Decode.map Scene3d.Mesh.texturedFaces
+                        (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
+                    )
+            }
+        , Scene3d.Material.load "/assets/box_red_letter_a.png"
+            |> Task.attempt BoxRedLetterATextureLoaded
         ]
 
 
@@ -218,6 +235,27 @@ update msg model =
             , Cmd.none
             )
 
+        --
+        BoxMeshLetterALoaded (Err err) ->
+            -- Debug.todo (Debug.toString err)
+            ( model, Cmd.none )
+
+        BoxMeshLetterALoaded (Ok boxMesh) ->
+            ( { model | boxMeshLetterA = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
+            , Cmd.none
+            )
+
+        BoxRedLetterATextureLoaded (Err err) ->
+            -- Debug.todo (Debug.toString err)
+            ( model, Cmd.none )
+
+        BoxRedLetterATextureLoaded (Ok texture) ->
+            ( { model | boxMaterialRedLetterA = Just (Scene3d.Material.texturedMatte texture) }
+            , Cmd.none
+            )
+
+        --
+        --
         --
         UserChosePlayWithStranger ->
             case model.page of
@@ -799,7 +837,7 @@ view model =
                 viewAdmin model
 
             Home gameToJoin joinError ->
-                viewHome gameToJoin joinError
+                viewHome model gameToJoin joinError
 
             Waiting additionalMessage ->
                 viewWaiting additionalMessage
@@ -819,11 +857,87 @@ viewAdmin model =
     ]
 
 
-viewHome : String -> Bool -> List (Html FrontendMsg)
-viewHome gameToJoin joinError =
+viewHome : FrontendModel -> String -> Bool -> List (Html FrontendMsg)
+viewHome model gameToJoin joinError =
     [ Html.div
         [ Css.home ]
         [ Html.h1 [] [ Html.text "Block Topple" ]
+        , Scene3d.sunny
+            { upDirection = Direction3d.positiveZ
+            , sunlightDirection =
+                Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -120)
+            , shadows = True
+            , camera =
+                Camera3d.lookAt
+                    { eyePoint = Point3d.meters 0 14 1
+                    , focalPoint = Point3d.meters 0 0 0
+                    , upDirection = Direction3d.positiveZ
+                    , projection = Camera3d.Perspective
+                    , fov = Camera3d.angle (Angle.degrees 24)
+                    }
+            , dimensions = ( Pixels.int 800, Pixels.int 250 )
+            , background =
+                Scene3d.backgroundColor (Color.rgb255 100 149 237)
+
+            -- Scene3d.transparentBackground
+            , clipDepth = Length.meters 0.1
+            , entities =
+                List.concat
+                    [ case ( model.boxMeshLetterA, model.boxMaterialRedLetterA ) of
+                        ( Just ( mesh, meshShadow ), Just material ) ->
+                            [ Scene3d.meshWithShadow
+                                material
+                                mesh
+                                meshShadow
+                                |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 4.5 6 0))
+                            ]
+
+                        _ ->
+                            []
+                    , case model.cylinderMesh of
+                        Nothing ->
+                            []
+
+                        Just ( mesh, meshShadow ) ->
+                            [ Scene3d.meshWithShadow
+                                (Scene3d.Material.nonmetal
+                                    { baseColor = Color.blue
+                                    , roughness = 0.25
+                                    }
+                                )
+                                mesh
+                                meshShadow
+                                |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0 6 -1))
+                            , Scene3d.meshWithShadow
+                                (Scene3d.Material.nonmetal
+                                    { baseColor = Color.blue
+                                    , roughness = 0.25
+                                    }
+                                )
+                                mesh
+                                meshShadow
+                                |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0 6 0))
+                            ]
+                    , let
+                        cone =
+                            Cone3d.startingAt
+                                Point3d.origin
+                                Direction3d.positiveZ
+                                { radius = Length.centimeters 60
+                                , length = Length.centimeters 80
+                                }
+                      in
+                      [ Scene3d.coneWithShadow
+                            (Scene3d.Material.nonmetal
+                                { baseColor = Color.blue
+                                , roughness = 0.25
+                                }
+                            )
+                            cone
+                            |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0 6 1))
+                      ]
+                    ]
+            }
         , Html.button
             [ Html.Attributes.type_ "button"
             , Html.Events.onClick UserChosePlayWithStranger

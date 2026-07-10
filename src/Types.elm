@@ -59,6 +59,10 @@ type alias FrontendModel =
     , boxMaterialRed : Maybe (Scene3d.Material.Textured BodyCoordinates)
     , boxMaterialBlue : Maybe (Scene3d.Material.Textured BodyCoordinates)
     , cylinderMesh : Maybe CustomMesh
+
+    --
+    , boxMeshLetterA : Maybe CustomMesh
+    , boxMaterialRedLetterA : Maybe (Scene3d.Material.Textured BodyCoordinates)
     }
 
 
@@ -154,6 +158,10 @@ type FrontendMsg
     | BoxRedTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | BoxBlueTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | CylinderMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
+      --
+    | BoxMeshLetterALoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
+    | BoxRedLetterATextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
+      --
       --
     | UserChosePlayWithStranger
     | UserChoseHostFriend
