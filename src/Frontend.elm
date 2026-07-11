@@ -89,8 +89,7 @@ init url key =
       , cylinderMesh = Nothing
 
       --
-      , boxMeshLetterA = Nothing
-      , boxMaterialRedLetterA = Nothing
+      , letterBlocks = Dict.empty
       }
     , Cmd.batch
         [ Task.perform
@@ -120,17 +119,57 @@ loadBox =
             |> Task.attempt BoxBlueTextureLoaded
 
         --
-        , Http.get
-            { url = "/assets/box_letter_a.obj"
-            , expect =
-                Obj.Decode.expectObj BoxMeshLetterALoaded
-                    Length.meters
-                    (Obj.Decode.map Scene3d.Mesh.texturedFaces
-                        (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
-                    )
-            }
-        , Scene3d.Material.load "/assets/box_red_letter_a.png"
-            |> Task.attempt BoxRedLetterATextureLoaded
+        , letters
+            |> List.map
+                (\letter ->
+                    Task.map2 Tuple.pair
+                        (Http.task
+                            { method = "GET"
+                            , headers = []
+                            , url = "/assets/box_letter_" ++ String.fromChar letter ++ ".obj"
+                            , body = Http.emptyBody
+                            , resolver =
+                                Http.stringResolver
+                                    (\response ->
+                                        case response of
+                                            Http.BadUrl_ url ->
+                                                Err (Http.BadUrl url)
+
+                                            Http.Timeout_ ->
+                                                Err Http.Timeout
+
+                                            Http.NetworkError_ ->
+                                                Err Http.NetworkError
+
+                                            Http.BadStatus_ metadata _ ->
+                                                Err (Http.BadStatus metadata.statusCode)
+
+                                            Http.GoodStatus_ _ body ->
+                                                let
+                                                    units =
+                                                        Length.meters
+
+                                                    decoder =
+                                                        Obj.Decode.map Scene3d.Mesh.texturedFaces
+                                                            (Obj.Decode.texturedFacesIn Frame3d.atOrigin)
+                                                in
+                                                case Obj.Decode.decodeString units decoder body of
+                                                    Ok value ->
+                                                        Ok value
+
+                                                    Err string ->
+                                                        Err (Http.BadBody string)
+                                    )
+                            , timeout = Nothing
+                            }
+                            |> Task.mapError Debug.toString
+                        )
+                        (Scene3d.Material.load ("/assets/box_red_letter_" ++ String.fromChar letter ++ ".png")
+                            |> Task.mapError Debug.toString
+                        )
+                        |> Task.attempt (LetterLoaded letter)
+                )
+            |> Cmd.batch
         ]
 
 
@@ -235,22 +274,19 @@ update msg model =
             , Cmd.none
             )
 
-        --
-        BoxMeshLetterALoaded (Err err) ->
-            -- Debug.todo (Debug.toString err)
+        LetterLoaded letter (Err err) ->
+            -- Debug.todo (letter ++ ": " ++ Debug.toString err)
             ( model, Cmd.none )
 
-        BoxMeshLetterALoaded (Ok boxMesh) ->
-            ( { model | boxMeshLetterA = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
-            , Cmd.none
-            )
-
-        BoxRedLetterATextureLoaded (Err err) ->
-            -- Debug.todo (Debug.toString err)
-            ( model, Cmd.none )
-
-        BoxRedLetterATextureLoaded (Ok texture) ->
-            ( { model | boxMaterialRedLetterA = Just (Scene3d.Material.texturedMatte texture) }
+        LetterLoaded letter (Ok ( mesh, texture )) ->
+            ( { model
+                | letterBlocks =
+                    Dict.insert letter
+                        ( ( mesh, Scene3d.Mesh.shadow mesh )
+                        , Scene3d.Material.texturedMatte texture
+                        )
+                        model.letterBlocks
+              }
             , Cmd.none
             )
 
@@ -883,17 +919,8 @@ viewHome model gameToJoin joinError =
             , clipDepth = Length.meters 0.1
             , entities =
                 List.concat
-                    [ case ( model.boxMeshLetterA, model.boxMaterialRedLetterA ) of
-                        ( Just ( mesh, meshShadow ), Just material ) ->
-                            [ Scene3d.meshWithShadow
-                                material
-                                mesh
-                                meshShadow
-                                |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 4.5 6 0))
-                            ]
-
-                        _ ->
-                            []
+                    [ stringToBlocks model "ab"
+                        |> List.map (Scene3d.translateBy (Vector3d.meters 5 5 0))
                     , case model.cylinderMesh of
                         Nothing ->
                             []
@@ -973,6 +1000,32 @@ viewHome model gameToJoin joinError =
             Html.text ""
         ]
     ]
+
+
+stringToBlocks : FrontendModel -> String -> List (Scene3d.Entity ())
+stringToBlocks model str =
+    String.foldl
+        (\letter ( entities, offset ) ->
+            ( case Dict.get letter model.letterBlocks |> Debug.log ("letter " ++ String.fromChar letter ++ "?") of
+                Nothing ->
+                    entities
+
+                Just ( ( mesh, meshShadow ), material ) ->
+                    (Scene3d.meshWithShadow
+                        material
+                        mesh
+                        meshShadow
+                        |> Scene3d.placeIn Frame3d.atOrigin
+                        |> Scene3d.translateBy (Vector3d.meters offset 0 0)
+                    )
+                        :: entities
+            , offset - 1
+            )
+        )
+        ( [], 0 )
+        str
+        |> Tuple.first
+        |> List.reverse
 
 
 viewWaiting : String -> List (Html FrontendMsg)

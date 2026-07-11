@@ -11,6 +11,7 @@ import Camera3d exposing (Camera3d)
 import Color exposing (Color)
 import Cone3d exposing (Cone3d)
 import Cylinder3d exposing (Cylinder3d)
+import Dict exposing (Dict)
 import Direction3d
 import Duration exposing (Duration)
 import Force exposing (Force)
@@ -59,11 +60,15 @@ type alias FrontendModel =
     , boxMaterialRed : Maybe (Scene3d.Material.Textured BodyCoordinates)
     , boxMaterialBlue : Maybe (Scene3d.Material.Textured BodyCoordinates)
     , cylinderMesh : Maybe CustomMesh
-
-    --
-    , boxMeshLetterA : Maybe CustomMesh
-    , boxMaterialRedLetterA : Maybe (Scene3d.Material.Textured BodyCoordinates)
+    , letterBlocks : Dict Char ( CustomMesh, Scene3d.Material.Textured BodyCoordinates )
     }
+
+
+letters : List Char
+letters =
+    [ 'a'
+    , 'b'
+    ]
 
 
 type Page
@@ -154,13 +159,12 @@ type FrontendMsg
     = UrlClicked UrlRequest
     | UrlChanged Url
     | Resize Int Int
+      --
     | BoxMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
     | BoxRedTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | BoxBlueTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | CylinderMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
-      --
-    | BoxMeshLetterALoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
-    | BoxRedLetterATextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
+    | LetterLoaded Char (Result String ( Scene3d.Mesh.Textured BodyCoordinates, Scene3d.Material.Texture Color ))
       --
       --
     | UserChosePlayWithStranger
