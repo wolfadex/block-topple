@@ -68,6 +68,9 @@ letters : List Char
 letters =
     [ 'a'
     , 'b'
+    , 'c'
+    , 'd'
+    , 'e'
     ]
 
 

@@ -918,7 +918,7 @@ viewHome model gameToJoin joinError =
             , clipDepth = Length.meters 0.1
             , entities =
                 List.concat
-                    [ stringToBlocks model "ab"
+                    [ stringToBlocks model "abcde"
                         |> List.map (Scene3d.translateBy (Vector3d.meters 5 5 0))
                     , case model.cylinderMesh of
                         Nothing ->
