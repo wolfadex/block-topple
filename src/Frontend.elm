@@ -915,16 +915,17 @@ viewHome model gameToJoin joinError =
             , dimensions = ( Pixels.int 800, Pixels.int 250 )
             , background =
                 Scene3d.backgroundColor (Color.rgb255 100 149 237)
-                -- Scene3d.transparentBackground
+
+            -- Scene3d.transparentBackground
             , clipDepth = Length.meters 0.1
             , entities =
                 List.concat
-                    [ stringToBlocks model "abcdefghijklmnopqrstuvwxyz"
+                    [ stringToBlocks model (String.fromList letters)
                         |> List.map (Scene3d.translateBy (Vector3d.meters 5 5 0))
+
                     -- , case model.cylinderMesh of
                     --     Nothing ->
                     --         []
-
                     --     Just ( mesh, meshShadow ) ->
                     --         [ Scene3d.meshWithShadow
                     --             (Scene3d.Material.nonmetal
