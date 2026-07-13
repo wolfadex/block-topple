@@ -921,7 +921,7 @@ viewHome model gameToJoin joinError =
             , entities =
                 List.concat
                     [ stringToBlocks model (String.fromList letters)
-                        |> List.map (Scene3d.translateBy (Vector3d.meters 5 5 0))
+                        |> List.map (Scene3d.translateBy (Vector3d.meters 14 5 0))
 
                     -- , case model.cylinderMesh of
                     --     Nothing ->
