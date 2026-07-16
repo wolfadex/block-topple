@@ -118,7 +118,7 @@ type GameMsg
     | UserEnteredRotation String
     | UserEnteredForce String
     | UserFiredBall
-    | UserRotatedCamera String
+    | UserStartedMovingCamera String
     | UserRequestedNewGame
     | UserRequestedLeaveMatch
 

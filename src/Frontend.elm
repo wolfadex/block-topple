@@ -24,6 +24,7 @@ import Html.Events
 import Http
 import Json.Decode exposing (Decoder)
 import Lamdera
+import Lamdera.Json as Json
 import Length exposing (Length, Meters)
 import Obj.Decode
 import Parameter1d
@@ -40,6 +41,7 @@ import Rectangle2d
 import Scene3d exposing (Background, Entity)
 import Scene3d.Material
 import Scene3d.Mesh
+import SeqSet exposing (SeqSet)
 import Set
 import Sphere3d exposing (Sphere3d)
 import Task
@@ -192,26 +194,63 @@ loadCylinder =
 
 subscriptions : FrontendModel -> Sub FrontendMsg
 subscriptions model =
+    let
+        inGame =
+            case model.page of
+                AdminView ->
+                    False
+
+                Home _ _ ->
+                    False
+
+                Waiting _ ->
+                    False
+
+                InGame _ ->
+                    True
+    in
     Sub.batch
         [ Browser.Events.onResize Resize
-        , let
-            doTick =
-                case model.page of
-                    AdminView ->
-                        False
-
-                    Home _ _ ->
-                        False
-
-                    Waiting _ ->
-                        False
-
-                    InGame gameModel ->
-                        (gameModel.stage == Simulating)
-                            || (gameModel.opponentDisconnected /= Nothing)
-          in
-          if doTick then
+        , if inGame then
             Browser.Events.onAnimationFrameDelta (\d -> GameMessage (Tick (Duration.milliseconds d)))
+
+          else
+            Sub.none
+        , if inGame then
+            Browser.Events.onKeyDown
+                (Json.Decode.andThen
+                    (\key ->
+                        case key of
+                            "e" ->
+                                Json.Decode.succeed (GameMessage (UserStartedMovingCamera Right))
+
+                            "q" ->
+                                Json.Decode.succeed (GameMessage (UserStartedMovingCamera Left))
+
+                            _ ->
+                                Json.Decode.fail "unsupported key press"
+                    )
+                    (Json.Decode.field "key" Json.Decode.string)
+                )
+
+          else
+            Sub.none
+        , if inGame then
+            Browser.Events.onKeyUp
+                (Json.Decode.andThen
+                    (\key ->
+                        case key of
+                            "e" ->
+                                Json.Decode.succeed (GameMessage (UserStoppedMovingCamera Right))
+
+                            "q" ->
+                                Json.Decode.succeed (GameMessage (UserStoppedMovingCamera Left))
+
+                            _ ->
+                                Json.Decode.fail "unsupported key press"
+                    )
+                    (Json.Decode.field "key" Json.Decode.string)
+                )
 
           else
             Sub.none
@@ -414,7 +453,13 @@ updateGame feModel msg model =
             ( { feModel | page = Home "" False }, Lamdera.sendToBackend LeaveMatchRequested )
 
         Tick delta ->
-            Tuple.mapFirst (\gm -> { feModel | page = InGame gm }) <|
+            Tuple.mapFirst
+                (\gm ->
+                    { feModel
+                        | page = InGame (updateCamera delta gm)
+                    }
+                )
+            <|
                 if model.stage == Simulating then
                     let
                         m =
@@ -473,16 +518,60 @@ updateGame feModel msg model =
                 else
                     ( model, Cmd.none )
 
-        UserRotatedCamera cameraRotation ->
+        UserStartedMovingCamera direction ->
             ( { model
-                | cameraRotation =
-                    cameraRotation
-                        |> String.toFloat
-                        |> Maybe.withDefault model.cameraRotation
+                | cameraMoving = SeqSet.insert direction model.cameraMoving
               }
             , Cmd.none
             )
                 |> Tuple.mapFirst (\gm -> { feModel | page = InGame gm })
+
+        UserStoppedMovingCamera direction ->
+            ( { model
+                | cameraMoving = SeqSet.remove direction model.cameraMoving
+              }
+            , Cmd.none
+            )
+                |> Tuple.mapFirst (\gm -> { feModel | page = InGame gm })
+
+
+updateCamera : Duration -> GameFrontend -> GameFrontend
+updateCamera delta model =
+    { model
+        | cameraRotation =
+            model.cameraRotation
+                |> updateCameraRotation delta model.cameraMoving
+        , cameraDistance =
+            model.cameraDistance
+                |> updateCameraDistance delta model.cameraMoving
+        , cameraHeight = model.cameraHeight
+    }
+
+
+updateCameraRotation : Duration -> SeqSet Direction -> Float -> Float
+updateCameraRotation delta directions angle =
+    if SeqSet.member Right directions && not (SeqSet.member Left directions) then
+        angle + Duration.inSeconds delta * 40
+
+    else if not (SeqSet.member Right directions) && SeqSet.member Left directions then
+        angle - Duration.inSeconds delta * 40
+
+    else
+        angle
+
+
+updateCameraDistance : Duration -> SeqSet Direction -> Float -> Float
+updateCameraDistance delta directions distance =
+    if SeqSet.member Backward directions && not (SeqSet.member Forward directions) then
+        (distance + Duration.inSeconds delta * 20)
+            |> min 90
+
+    else if not (SeqSet.member Backward directions) && SeqSet.member Forward directions then
+        (distance - Duration.inSeconds delta * 20)
+            |> max 30
+
+    else
+        distance
 
 
 fireBall : Float -> Float -> Float -> GameFrontend -> GameFrontend
@@ -655,11 +744,15 @@ simulateStep model =
         newModel
 
 
-camera : Float -> Camera3d Meters WorldCoordinates
-camera cameraRotation =
+viewCamera : Float -> Float -> Camera3d Meters WorldCoordinates
+viewCamera cameraRotation cameraDistance =
     Camera3d.lookAt
         { eyePoint =
-            eyePoint
+            Point3d.meters 0 0 3
+                |> Point3d.translateIn Direction3d.x
+                    (Length.meters (Debug.log "cameraDistance" cameraDistance))
+                |> Point3d.rotateAround Axis3d.y
+                    (Angle.degrees -20)
                 |> Point3d.rotateAround Axis3d.z
                     (Angle.degrees cameraRotation)
         , focalPoint = Point3d.meters 0 0 3
@@ -667,11 +760,6 @@ camera cameraRotation =
         , projection = Camera3d.Perspective
         , fov = Camera3d.angle (Angle.degrees 24)
         }
-
-
-eyePoint : Point3d Meters WorldCoordinates
-eyePoint =
-    Point3d.meters 40 40 20
 
 
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
@@ -743,6 +831,9 @@ updateFromBackend msg model =
 
                                 Blue ->
                                     90
+                        , cameraDistance = 30
+                        , cameraHeight = 0
+                        , cameraMoving = SeqSet.empty
                         , redTowersRemaining = redTowers
                         , blueTowersRemaining = blueTowers
                         }
@@ -780,6 +871,9 @@ updateFromBackend msg model =
 
                                 Blue ->
                                     90
+                        , cameraDistance = 30
+                        , cameraHeight = 0
+                        , cameraMoving = SeqSet.empty
                         , redTowersRemaining = game.redTowersRemaining
                         , blueTowersRemaining = game.blueTowersRemaining
                         }
@@ -1163,7 +1257,7 @@ viewGame model gameModel =
                 { upDirection = Direction3d.positiveZ
                 , sunlightDirection = Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -60)
                 , shadows = True
-                , camera = camera gameModel.cameraRotation
+                , camera = viewCamera gameModel.cameraRotation gameModel.cameraDistance
                 , dimensions = model.dimensions
                 , background = Scene3d.backgroundColor (Color.rgb255 100 149 237)
                 , clipDepth = Length.meters 0.1
@@ -1410,17 +1504,47 @@ viewGame model gameModel =
                         [ Html.text "Leave match"
                         ]
                     ]
-        , Html.input
-            [ Html.Attributes.style "position" "fixed"
-            , Html.Attributes.style "bottom" "2rem"
-            , Html.Attributes.type_ "range"
-            , Html.Attributes.min "0"
-            , Html.Attributes.max "360"
-            , Html.Attributes.step "1"
-            , Html.Attributes.value (String.fromFloat gameModel.cameraRotation)
-            , Html.Events.onInput UserRotatedCamera
+
+        -- , Html.input
+        --     [ Html.Attributes.style "position" "fixed"
+        --     , Html.Attributes.style "bottom" "2rem"
+        --     , Html.Attributes.type_ "range"
+        --     , Html.Attributes.min "0"
+        --     , Html.Attributes.max "360"
+        --     , Html.Attributes.step "1"
+        --     , Html.Attributes.value (String.fromFloat gameModel.cameraRotation)
+        --     , Html.Events.onInput UserStartedMovingCamera
+        --     ]
+        --     []
+        , viewCameraControls
+        ]
+
+
+viewCameraControls : Html GameMsg
+viewCameraControls =
+    Html.div
+        [ Css.gameCameraControls ]
+        [ Html.span [] [ Html.text "🎥" ]
+        , Html.button
+            [ Html.Events.onMouseDown (UserStartedMovingCamera Forward)
+            , Html.Events.onMouseUp (UserStoppedMovingCamera Forward)
             ]
-            []
+            [ Html.text "⬆" ]
+        , Html.button
+            [ Html.Events.onMouseDown (UserStartedMovingCamera Left)
+            , Html.Events.onMouseUp (UserStoppedMovingCamera Left)
+            ]
+            [ Html.text "⬅" ]
+        , Html.button
+            [ Html.Events.onMouseDown (UserStartedMovingCamera Backward)
+            , Html.Events.onMouseUp (UserStoppedMovingCamera Backward)
+            ]
+            [ Html.text "⬇" ]
+        , Html.button
+            [ Html.Events.onMouseDown (UserStartedMovingCamera Right)
+            , Html.Events.onMouseUp (UserStoppedMovingCamera Right)
+            ]
+            [ Html.text "➡" ]
         ]
 
 

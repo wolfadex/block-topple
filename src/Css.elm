@@ -1,4 +1,4 @@
-module Css exposing (setupText, home, joinForm, waiting, loadingContainer, cube, s1, s2, s3, s4, s5, s6)
+module Css exposing (setupText, home, joinForm, waiting, gameCameraControls, loadingContainer, cube, s1, s2, s3, s4, s5, s6)
 
 import Html
 import Html.Attributes
@@ -22,6 +22,11 @@ joinForm =
 waiting : Html.Attribute msg
 waiting =
     Html.Attributes.class "waiting"
+
+
+gameCameraControls : Html.Attribute msg
+gameCameraControls =
+    Html.Attributes.class "gameCameraControls"
 
 
 loadingContainer : Html.Attribute msg

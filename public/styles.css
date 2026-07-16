@@ -62,6 +62,12 @@ label {
     transform: translate(-50%, -50%);
 }
 
+.gameCameraControls {
+    position: fixed;
+    bottom: 2rem;
+    display: grid;
+}
+
 /* Borrowed from https://codepen.io/tigercodes/pen/abQxYrb */
 
 .loadingContainer {

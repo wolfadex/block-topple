@@ -153,8 +153,11 @@ type alias GameFrontend =
     , elapsed : Duration
     , timestep : Timestep
     , cameraRotation : Float
+    , cameraDistance : Float
+    , cameraHeight : Float
     , redTowersRemaining : Int
     , blueTowersRemaining : Int
+    , cameraMoving : SeqSet Direction
     }
 
 
@@ -244,9 +247,17 @@ type GameMsg
     | UserEnteredRotation String
     | UserEnteredForce String
     | UserFiredBall
-    | UserRotatedCamera String
+    | UserStartedMovingCamera Direction
+    | UserStoppedMovingCamera Direction
     | UserRequestedNewGame
     | UserRequestedLeaveMatch
+
+
+type Direction
+    = Left
+    | Right
+    | Forward
+    | Backward
 
 
 type ToBackend
