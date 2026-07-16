@@ -1078,6 +1078,33 @@ viewMenuTitle model =
         }
 
 
+viewGameOverText : FrontendModel -> String -> Html msg
+viewGameOverText model text =
+    Scene3d.sunny
+        { upDirection = Direction3d.positiveZ
+        , sunlightDirection =
+            Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -120)
+        , shadows = True
+        , camera =
+            Camera3d.lookAt
+                { eyePoint = Point3d.meters 0 14 1
+                , focalPoint = Point3d.meters 0 0 0
+                , upDirection = Direction3d.positiveZ
+                , projection = Camera3d.Perspective
+                , fov = Camera3d.angle (Angle.degrees 24)
+                }
+        , dimensions = ( Pixels.int 900, Pixels.int 250 )
+        , background =
+            -- Scene3d.backgroundColor (Color.rgb255 100 149 237)
+            Scene3d.transparentBackground
+        , clipDepth = Length.meters 0.1
+        , entities =
+            stringToBlocks model text
+
+        -- |> List.map (Scene3d.translateBy (Vector3d.meters 5.5 5 -1))
+        }
+
+
 stringToBlocks : FrontendModel -> String -> List (Scene3d.Entity ())
 stringToBlocks model str =
     String.foldl
@@ -1250,36 +1277,7 @@ viewGame model gameModel =
             ]
         , case gameModel.stage of
             GameOver winner ->
-                Html.div
-                    [ Html.Attributes.style "position" "fixed"
-                    , Html.Attributes.style "top" "30%"
-                    , Html.Attributes.style "width" "100vw"
-                    , Html.Attributes.style "text-align" "center"
-                    ]
-                    [ Html.h1
-                        [ Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
-                        , Html.Attributes.style "color" "white"
-                        , Html.Attributes.style "width" "100vw"
-                        ]
-                        [ Html.text <|
-                            if gameModel.myColor == winner then
-                                "You won!"
-
-                            else
-                                "They won"
-                        ]
-                    , Html.button
-                        [ Html.Attributes.type_ "button"
-                        , Html.Attributes.style "font-size" "1.25rem"
-                        , Html.Attributes.style "border" "3px solid white"
-                        , Html.Attributes.style "border-radius" "0.5rem"
-                        , Html.Attributes.style "cursor" "pointer"
-                        , Html.Attributes.style "color" "white"
-                        , Html.Attributes.style "background-color" "cornflowerblue"
-                        , Html.Events.onClick UserRequestedNewGame
-                        ]
-                        [ Html.text "New Game" ]
-                    ]
+                viewGameOver model gameModel winner
 
             _ ->
                 Html.form
@@ -1423,6 +1421,40 @@ viewGame model gameModel =
             , Html.Events.onInput UserRotatedCamera
             ]
             []
+        ]
+
+
+viewGameOver : FrontendModel -> GameFrontend -> Turn -> Html GameMsg
+viewGameOver model gameModel winner =
+    Html.div
+        [ Html.Attributes.style "position" "fixed"
+        , Html.Attributes.style "top" "30%"
+        , Html.Attributes.style "width" "100vw"
+        , Html.Attributes.style "text-align" "center"
+        ]
+        [ Html.h1
+            [ Html.Attributes.style "background-color" "rgba(0, 0, 0, 0.75)"
+            , Html.Attributes.style "color" "white"
+            , Html.Attributes.style "width" "100vw"
+            ]
+            [ Html.text <|
+                if gameModel.myColor == winner then
+                    "You won!"
+
+                else
+                    "They won"
+            ]
+        , Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Attributes.style "font-size" "1.25rem"
+            , Html.Attributes.style "border" "3px solid white"
+            , Html.Attributes.style "border-radius" "0.5rem"
+            , Html.Attributes.style "cursor" "pointer"
+            , Html.Attributes.style "color" "white"
+            , Html.Attributes.style "background-color" "cornflowerblue"
+            , Html.Events.onClick UserRequestedNewGame
+            ]
+            [ Html.text "New Game" ]
         ]
 
 
