@@ -227,6 +227,18 @@ subscriptions model =
                             "q" ->
                                 Json.Decode.succeed (GameMessage (UserStartedMovingCamera Left))
 
+                            "w" ->
+                                Json.Decode.succeed (GameMessage (UserStartedMovingCamera Forward))
+
+                            "s" ->
+                                Json.Decode.succeed (GameMessage (UserStartedMovingCamera Backward))
+
+                            "a" ->
+                                Json.Decode.succeed (GameMessage (UserStartedMovingCamera Down))
+
+                            "d" ->
+                                Json.Decode.succeed (GameMessage (UserStartedMovingCamera Up))
+
                             _ ->
                                 Json.Decode.fail "unsupported key press"
                     )
@@ -245,6 +257,18 @@ subscriptions model =
 
                             "q" ->
                                 Json.Decode.succeed (GameMessage (UserStoppedMovingCamera Left))
+
+                            "w" ->
+                                Json.Decode.succeed (GameMessage (UserStoppedMovingCamera Forward))
+
+                            "s" ->
+                                Json.Decode.succeed (GameMessage (UserStoppedMovingCamera Backward))
+
+                            "a" ->
+                                Json.Decode.succeed (GameMessage (UserStoppedMovingCamera Down))
+
+                            "d" ->
+                                Json.Decode.succeed (GameMessage (UserStoppedMovingCamera Up))
 
                             _ ->
                                 Json.Decode.fail "unsupported key press"
@@ -544,7 +568,9 @@ updateCamera delta model =
         , cameraDistance =
             model.cameraDistance
                 |> updateCameraDistance delta model.cameraMoving
-        , cameraHeight = model.cameraHeight
+        , cameraElevation =
+            model.cameraElevation
+                |> updateCameraElevation delta model.cameraMoving
     }
 
 
@@ -572,6 +598,20 @@ updateCameraDistance delta directions distance =
 
     else
         distance
+
+
+updateCameraElevation : Duration -> SeqSet Direction -> Float -> Float
+updateCameraElevation delta directions elevation =
+    if SeqSet.member Up directions && not (SeqSet.member Down directions) then
+        (elevation + Duration.inSeconds delta * 20)
+            |> min 60
+
+    else if not (SeqSet.member Up directions) && SeqSet.member Down directions then
+        (elevation - Duration.inSeconds delta * 20)
+            |> max 5
+
+    else
+        elevation
 
 
 fireBall : Float -> Float -> Float -> GameFrontend -> GameFrontend
@@ -744,15 +784,15 @@ simulateStep model =
         newModel
 
 
-viewCamera : Float -> Float -> Camera3d Meters WorldCoordinates
-viewCamera cameraRotation cameraDistance =
+viewCamera : Float -> Float -> Float -> Camera3d Meters WorldCoordinates
+viewCamera cameraRotation cameraDistance cameraElevation =
     Camera3d.lookAt
         { eyePoint =
             Point3d.meters 0 0 3
                 |> Point3d.translateIn Direction3d.x
-                    (Length.meters (Debug.log "cameraDistance" cameraDistance))
+                    (Length.meters cameraDistance)
                 |> Point3d.rotateAround Axis3d.y
-                    (Angle.degrees -20)
+                    (Angle.degrees -cameraElevation)
                 |> Point3d.rotateAround Axis3d.z
                     (Angle.degrees cameraRotation)
         , focalPoint = Point3d.meters 0 0 3
@@ -832,7 +872,7 @@ updateFromBackend msg model =
                                 Blue ->
                                     90
                         , cameraDistance = 30
-                        , cameraHeight = 0
+                        , cameraElevation = 20
                         , cameraMoving = SeqSet.empty
                         , redTowersRemaining = redTowers
                         , blueTowersRemaining = blueTowers
@@ -872,7 +912,7 @@ updateFromBackend msg model =
                                 Blue ->
                                     90
                         , cameraDistance = 30
-                        , cameraHeight = 0
+                        , cameraElevation = 20
                         , cameraMoving = SeqSet.empty
                         , redTowersRemaining = game.redTowersRemaining
                         , blueTowersRemaining = game.blueTowersRemaining
@@ -1257,7 +1297,11 @@ viewGame model gameModel =
                 { upDirection = Direction3d.positiveZ
                 , sunlightDirection = Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -60)
                 , shadows = True
-                , camera = viewCamera gameModel.cameraRotation gameModel.cameraDistance
+                , camera =
+                    viewCamera
+                        gameModel.cameraRotation
+                        gameModel.cameraDistance
+                        gameModel.cameraElevation
                 , dimensions = model.dimensions
                 , background = Scene3d.backgroundColor (Color.rgb255 100 149 237)
                 , clipDepth = Length.meters 0.1
@@ -1504,18 +1548,6 @@ viewGame model gameModel =
                         [ Html.text "Leave match"
                         ]
                     ]
-
-        -- , Html.input
-        --     [ Html.Attributes.style "position" "fixed"
-        --     , Html.Attributes.style "bottom" "2rem"
-        --     , Html.Attributes.type_ "range"
-        --     , Html.Attributes.min "0"
-        --     , Html.Attributes.max "360"
-        --     , Html.Attributes.step "1"
-        --     , Html.Attributes.value (String.fromFloat gameModel.cameraRotation)
-        --     , Html.Events.onInput UserStartedMovingCamera
-        --     ]
-        --     []
         , viewCameraControls
         ]
 
@@ -1524,15 +1556,24 @@ viewCameraControls : Html GameMsg
 viewCameraControls =
     Html.div
         [ Css.gameCameraControls ]
-        [ Html.span [] [ Html.text "🎥" ]
+        [ Html.button
+            [ Html.Events.onMouseDown (UserStartedMovingCamera Left)
+            , Html.Events.onMouseUp (UserStoppedMovingCamera Left)
+            ]
+            [ Html.text "↩" ]
         , Html.button
             [ Html.Events.onMouseDown (UserStartedMovingCamera Forward)
             , Html.Events.onMouseUp (UserStoppedMovingCamera Forward)
             ]
             [ Html.text "⬆" ]
         , Html.button
-            [ Html.Events.onMouseDown (UserStartedMovingCamera Left)
-            , Html.Events.onMouseUp (UserStoppedMovingCamera Left)
+            [ Html.Events.onMouseDown (UserStartedMovingCamera Right)
+            , Html.Events.onMouseUp (UserStoppedMovingCamera Right)
+            ]
+            [ Html.text "↪" ]
+        , Html.button
+            [ Html.Events.onMouseDown (UserStartedMovingCamera Down)
+            , Html.Events.onMouseUp (UserStoppedMovingCamera Down)
             ]
             [ Html.text "⬅" ]
         , Html.button
@@ -1541,8 +1582,8 @@ viewCameraControls =
             ]
             [ Html.text "⬇" ]
         , Html.button
-            [ Html.Events.onMouseDown (UserStartedMovingCamera Right)
-            , Html.Events.onMouseUp (UserStoppedMovingCamera Right)
+            [ Html.Events.onMouseDown (UserStartedMovingCamera Up)
+            , Html.Events.onMouseUp (UserStoppedMovingCamera Up)
             ]
             [ Html.text "➡" ]
         ]

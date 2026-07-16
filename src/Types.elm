@@ -154,7 +154,7 @@ type alias GameFrontend =
     , timestep : Timestep
     , cameraRotation : Float
     , cameraDistance : Float
-    , cameraHeight : Float
+    , cameraElevation : Float
     , redTowersRemaining : Int
     , blueTowersRemaining : Int
     , cameraMoving : SeqSet Direction
@@ -258,6 +258,8 @@ type Direction
     | Right
     | Forward
     | Backward
+    | Up
+    | Down
 
 
 type ToBackend
