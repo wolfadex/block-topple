@@ -37,9 +37,10 @@ import Point2d
 import Point3d exposing (Point3d)
 import Quantity exposing (Quantity)
 import Rectangle2d
-import Scene3d exposing (Entity)
+import Scene3d exposing (Background, Entity)
 import Scene3d.Material
 import Scene3d.Mesh
+import Set
 import Sphere3d exposing (Sphere3d)
 import Task
 import Timestep exposing (Timestep)
@@ -87,9 +88,12 @@ init url key =
       , boxMaterialRed = Nothing
       , boxMaterialBlue = Nothing
       , cylinderMesh = Nothing
-
-      --
       , letterBlocks = Dict.empty
+      , setup =
+            Loading
+                (Set.fromList
+                    ([ "box", "boxMatRed", "boxMatBlue", "cylinder" ] ++ letters)
+                )
       }
     , Cmd.batch
         [ Task.perform
@@ -126,7 +130,7 @@ loadBox =
                         (Http.task
                             { method = "GET"
                             , headers = []
-                            , url = "/assets/box_letter_" ++ String.fromChar letter ++ ".obj"
+                            , url = "/assets/box_letter_" ++ letter ++ ".obj"
                             , body = Http.emptyBody
                             , resolver =
                                 Http.stringResolver
@@ -164,7 +168,7 @@ loadBox =
                             }
                             |> Task.mapError Debug.toString
                         )
-                        (Scene3d.Material.load ("/assets/box_red_letter_" ++ String.fromChar letter ++ ".png")
+                        (Scene3d.Material.load ("/assets/box_red_letter_" ++ letter ++ ".png")
                             |> Task.mapError Debug.toString
                         )
                         |> Task.attempt (LetterLoaded letter)
@@ -240,43 +244,55 @@ update msg model =
         --
         BoxMeshLoaded (Err err) ->
             -- Debug.todo (Debug.toString err)
-            ( model, Cmd.none )
+            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
 
         BoxMeshLoaded (Ok boxMesh) ->
-            ( { model | boxMesh = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh ) }
+            ( { model
+                | boxMesh = Just ( boxMesh, Scene3d.Mesh.shadow boxMesh )
+                , setup = loadedAsset "box" model.setup
+              }
             , Cmd.none
             )
 
         BoxRedTextureLoaded (Err err) ->
             -- Debug.todo (Debug.toString err)
-            ( model, Cmd.none )
+            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
 
         BoxRedTextureLoaded (Ok texture) ->
-            ( { model | boxMaterialRed = Just (Scene3d.Material.texturedMatte texture) }
+            ( { model
+                | boxMaterialRed = Just (Scene3d.Material.texturedMatte texture)
+                , setup = loadedAsset "boxMatRed" model.setup
+              }
             , Cmd.none
             )
 
         BoxBlueTextureLoaded (Err err) ->
             -- Debug.todo (Debug.toString err)
-            ( model, Cmd.none )
+            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
 
         BoxBlueTextureLoaded (Ok texture) ->
-            ( { model | boxMaterialBlue = Just (Scene3d.Material.texturedMatte texture) }
+            ( { model
+                | boxMaterialBlue = Just (Scene3d.Material.texturedMatte texture)
+                , setup = loadedAsset "boxMatBlue" model.setup
+              }
             , Cmd.none
             )
 
         CylinderMeshLoaded (Err err) ->
             -- Debug.todo (Debug.toString err)
-            ( model, Cmd.none )
+            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
 
         CylinderMeshLoaded (Ok cylinderMesh) ->
-            ( { model | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh ) }
+            ( { model
+                | cylinderMesh = Just ( cylinderMesh, Scene3d.Mesh.shadow cylinderMesh )
+                , setup = loadedAsset "cylinder" model.setup
+              }
             , Cmd.none
             )
 
         LetterLoaded letter (Err err) ->
             -- Debug.todo (letter ++ ": " ++ Debug.toString err)
-            ( model, Cmd.none )
+            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
 
         LetterLoaded letter (Ok ( mesh, texture )) ->
             ( { model
@@ -286,6 +302,7 @@ update msg model =
                         , Scene3d.Material.texturedMatte texture
                         )
                         model.letterBlocks
+                , setup = loadedAsset letter model.setup
               }
             , Cmd.none
             )
@@ -869,103 +886,89 @@ view : FrontendModel -> Browser.Document FrontendMsg
 view model =
     { title = "Block Topple"
     , body =
-        case model.page of
-            AdminView ->
-                viewAdmin model
+        case model.setup of
+            Loading _ ->
+                viewLoading
 
-            Home gameToJoin joinError ->
-                viewHome model gameToJoin joinError
+            LoadFailure error ->
+                viewLoadFailure error
 
-            Waiting additionalMessage ->
-                viewWaiting additionalMessage
+            Loaded ->
+                case model.page of
+                    AdminView ->
+                        viewAdmin model
 
-            InGame gameModel ->
-                viewGame model gameModel
+                    Home gameToJoin joinError ->
+                        viewHome model gameToJoin joinError
+
+                    Waiting additionalMessage ->
+                        viewWaiting additionalMessage
+
+                    InGame gameModel ->
+                        viewGame model gameModel
     }
+
+
+viewLoading : List (Html FrontendMsg)
+viewLoading =
+    [ Html.main_
+        []
+        [ Html.div
+            [ Css.setupText
+            ]
+            [ Html.span [] [ Html.text "Collecting blocks..." ] ]
+        , cubeSpinner
+        ]
+    ]
+
+
+cubeSpinner : Html msg
+cubeSpinner =
+    Html.div
+        [ Css.loadingContainer ]
+        [ Html.div
+            [ Css.cube ]
+            [ Html.div [ Css.s1 ] []
+            , Html.div [ Css.s2 ] []
+            , Html.div [ Css.s3 ] []
+            , Html.div [ Css.s4 ] []
+            , Html.div [ Css.s5 ] []
+            , Html.div [ Css.s6 ] []
+            ]
+        ]
+
+
+viewLoadFailure : String -> List (Html FrontendMsg)
+viewLoadFailure error =
+    [ Html.main_ []
+        [ Html.p [ Css.setupText ]
+            [ Html.text "Sorry, looks like we failed to load assets."
+            , Html.br [] []
+            , Html.br [] []
+            , Html.text error
+            ]
+        ]
+    ]
 
 
 viewAdmin : FrontendModel -> List (Html FrontendMsg)
 viewAdmin model =
-    [ Html.h1 [] [ Html.text "Block Topple - Admin" ]
-    , Html.button
-        [ Html.Events.onClick Admin_ClickedClearAllMatches
+    [ Html.main_
+        []
+        [ Html.h1 [] [ Html.text "Block Topple - Admin" ]
+        , Html.button
+            [ Html.Events.onClick Admin_ClickedClearAllMatches
+            ]
+            [ Html.text "Clear all matches" ]
         ]
-        [ Html.text "Clear all matches" ]
     ]
 
 
 viewHome : FrontendModel -> String -> Bool -> List (Html FrontendMsg)
 viewHome model gameToJoin joinError =
-    [ Html.div
+    [ Html.main_
         [ Css.home ]
-        [ Html.h1 [] [ Html.text "Block Topple" ]
-        , Scene3d.sunny
-            { upDirection = Direction3d.positiveZ
-            , sunlightDirection =
-                Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -120)
-            , shadows = True
-            , camera =
-                Camera3d.lookAt
-                    { eyePoint = Point3d.meters 0 14 1
-                    , focalPoint = Point3d.meters 0 0 0
-                    , upDirection = Direction3d.positiveZ
-                    , projection = Camera3d.Perspective
-                    , fov = Camera3d.angle (Angle.degrees 24)
-                    }
-            , dimensions = ( Pixels.int 800, Pixels.int 250 )
-            , background =
-                Scene3d.backgroundColor (Color.rgb255 100 149 237)
-
-            -- Scene3d.transparentBackground
-            , clipDepth = Length.meters 0.1
-            , entities =
-                List.concat
-                    [ stringToBlocks model (String.fromList letters)
-                        |> List.map (Scene3d.translateBy (Vector3d.meters 20 5 0))
-
-                    -- , case model.cylinderMesh of
-                    --     Nothing ->
-                    --         []
-                    --     Just ( mesh, meshShadow ) ->
-                    --         [ Scene3d.meshWithShadow
-                    --             (Scene3d.Material.nonmetal
-                    --                 { baseColor = Color.blue
-                    --                 , roughness = 0.25
-                    --                 }
-                    --             )
-                    --             mesh
-                    --             meshShadow
-                    --             |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0 6 -1))
-                    --         , Scene3d.meshWithShadow
-                    --             (Scene3d.Material.nonmetal
-                    --                 { baseColor = Color.blue
-                    --                 , roughness = 0.25
-                    --                 }
-                    --             )
-                    --             mesh
-                    --             meshShadow
-                    --             |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0 6 0))
-                    --         ]
-                    , let
-                        cone =
-                            Cone3d.startingAt
-                                Point3d.origin
-                                Direction3d.positiveZ
-                                { radius = Length.centimeters 60
-                                , length = Length.centimeters 80
-                                }
-                      in
-                      [ Scene3d.coneWithShadow
-                            (Scene3d.Material.nonmetal
-                                { baseColor = Color.blue
-                                , roughness = 0.25
-                                }
-                            )
-                            cone
-                            |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0 6 1))
-                      ]
-                    ]
-            }
+        [ viewMenuTitle model
         , Html.button
             [ Html.Attributes.type_ "button"
             , Html.Events.onClick UserChosePlayWithStranger
@@ -1003,11 +1006,87 @@ viewHome model gameToJoin joinError =
     ]
 
 
+viewMenuTitle : FrontendModel -> Html FrontendMsg
+viewMenuTitle model =
+    Scene3d.sunny
+        { upDirection = Direction3d.positiveZ
+        , sunlightDirection =
+            Direction3d.xyZ (Angle.degrees 135) (Angle.degrees -120)
+        , shadows = True
+        , camera =
+            Camera3d.lookAt
+                { eyePoint = Point3d.meters 0 14 1
+                , focalPoint = Point3d.meters 0 0 0
+                , upDirection = Direction3d.positiveZ
+                , projection = Camera3d.Perspective
+                , fov = Camera3d.angle (Angle.degrees 24)
+                }
+        , dimensions = ( Pixels.int 900, Pixels.int 250 )
+        , background =
+            -- Scene3d.backgroundColor (Color.rgb255 100 149 237)
+            Scene3d.transparentBackground
+        , clipDepth = Length.meters 0.1
+        , entities =
+            List.concat
+                [ stringToBlocks model "block"
+                    |> List.map (Scene3d.translateBy (Vector3d.meters 5.5 5 -1))
+                , stringToBlocks model "topple"
+                    |> List.map (Scene3d.translateBy (Vector3d.meters -0.5 5 -1))
+                , case model.cylinderMesh of
+                    Nothing ->
+                        []
+
+                    Just ( mesh, meshShadow ) ->
+                        [ Scene3d.meshWithShadow
+                            (Scene3d.Material.nonmetal
+                                { baseColor = Color.blue
+                                , roughness = 0.25
+                                }
+                            )
+                            mesh
+                            meshShadow
+                            |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0.5 5 -1))
+                        , Scene3d.meshWithShadow
+                            (Scene3d.Material.nonmetal
+                                { baseColor = Color.blue
+                                , roughness = 0.25
+                                }
+                            )
+                            mesh
+                            meshShadow
+                            |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0.5 5 0))
+                        ]
+                , let
+                    cone =
+                        Cone3d.startingAt
+                            Point3d.origin
+                            Direction3d.positiveZ
+                            { radius = Length.centimeters 60
+                            , length = Length.centimeters 80
+                            }
+                  in
+                  [ Scene3d.coneWithShadow
+                        (Scene3d.Material.nonmetal
+                            { baseColor = Color.blue
+                            , roughness = 0.25
+                            }
+                        )
+                        cone
+                        |> Scene3d.placeIn (Frame3d.atPoint (Point3d.meters 0.5 5 1))
+                  ]
+                ]
+        }
+
+
 stringToBlocks : FrontendModel -> String -> List (Scene3d.Entity ())
 stringToBlocks model str =
     String.foldl
         (\letter ( entities, offset ) ->
-            ( case Dict.get letter model.letterBlocks |> Debug.log ("letter " ++ String.fromChar letter ++ "?") of
+            let
+                strLetter =
+                    String.fromChar letter
+            in
+            ( case Dict.get strLetter model.letterBlocks of
                 Nothing ->
                     entities
 
@@ -1031,7 +1110,7 @@ stringToBlocks model str =
 
 viewWaiting : String -> List (Html FrontendMsg)
 viewWaiting additionalMessage =
-    [ Html.div
+    [ Html.main_
         [ Css.waiting
         ]
         [ Html.p [] [ Html.text additionalMessage ]

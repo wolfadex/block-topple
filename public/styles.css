@@ -1,5 +1,22 @@
+:root {
+    --block-tan: rgb(243.78, 207.57, 153);
+    --block-red: rgb(211.14, 92.055, 87.465);
+}
+
 * {
     box-sizing: border-box;
+    font-family: sans-serif;
+}
+
+main {
+    background-color: cornflowerblue;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
 }
 
 button {
@@ -15,6 +32,14 @@ label {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+}
+
+.setupText {
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 2rem;
+    padding: 0.5rem 1rem;
+    font-size: 2rem;
 }
 
 .home {
@@ -35,4 +60,57 @@ label {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
+}
+
+/* Borrowed from https://codepen.io/tigercodes/pen/abQxYrb */
+
+.loadingContainer {
+  perspective: 1000px;
+  perspective-origin: 100% 100%;
+}
+
+.cube {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  transform-style: preserve-3d;
+  animation: rotate 6s linear infinite;
+}
+
+.cube > div {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  background-color: var(--block-tan);
+  border: 10px solid var(--block-red);
+}
+
+.s1 {
+  transform: translateZ(100px);
+}
+
+.s2 {
+  transform: rotateY(90deg) translateZ(100px);
+}
+
+.s3 {
+  transform: rotateY(180deg) translateZ(100px);
+}
+
+.s4 {
+  transform: rotateX(90deg) translateZ(100px);
+}
+
+.s5 {
+  transform: rotateY(-90deg) translateZ(100px);
+}
+
+.s6 {
+  transform: rotateX(-90deg) translateZ(100px) rotate(180deg);
+}
+
+@keyframes rotate {
+  100% {
+    transform: rotateX(0deg) rotateY(360deg) rotateZ(360deg);
+  }
 }

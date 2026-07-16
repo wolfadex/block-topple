@@ -41,6 +41,7 @@ import Scene3d.Material
 import Scene3d.Mesh
 import SeqDict exposing (SeqDict)
 import SeqSet exposing (SeqSet)
+import Set exposing (Set)
 import Sphere3d exposing (Sphere3d)
 import Task
 import Timestep exposing (Timestep)
@@ -60,38 +61,73 @@ type alias FrontendModel =
     , boxMaterialRed : Maybe (Scene3d.Material.Textured BodyCoordinates)
     , boxMaterialBlue : Maybe (Scene3d.Material.Textured BodyCoordinates)
     , cylinderMesh : Maybe CustomMesh
-    , letterBlocks : Dict Char ( CustomMesh, Scene3d.Material.Textured BodyCoordinates )
+    , letterBlocks : Dict String ( CustomMesh, Scene3d.Material.Textured BodyCoordinates )
+    , setup : Setup
     }
 
 
-letters : List Char
+type Setup
+    = Loading (Set String)
+    | Loaded
+    | LoadFailure String
+
+
+loadedAsset : String -> Setup -> Setup
+loadedAsset asset setup =
+    case setup of
+        Loading toLoad ->
+            let
+                stillLoading =
+                    Set.remove asset toLoad
+            in
+            if Set.isEmpty stillLoading then
+                Loaded
+
+            else
+                Loading stillLoading
+
+        _ ->
+            setup
+
+
+loadAssetFailure : String -> Setup -> Setup
+loadAssetFailure error setup =
+    case setup of
+        Loading _ ->
+            LoadFailure error
+
+        _ ->
+            setup
+
+
+letters : List String
 letters =
-    [ 'a'
-    , 'b'
-    , 'c'
-    , 'd'
-    , 'e'
-    , 'f'
-    , 'g'
-    , 'h'
-    , 'i'
-    , 'j'
-    , 'k'
-    , 'l'
-    , 'm'
-    , 'n'
-    , 'o'
-    , 'p'
-    , 'q'
-    , 'r'
-    , 's'
-    , 't'
-    , 'u'
-    , 'v'
-    , 'w'
-    , 'x'
-    , 'y'
-    , 'z'
+    [ "a"
+    , "b"
+    , "c"
+    , "d"
+    , "e"
+    , "f"
+    , "g"
+    , "h"
+    , "i"
+    , "j"
+    , "k"
+    , "l"
+    , "m"
+    , "n"
+    , "o"
+    , "p"
+    , "q"
+    , "r"
+    , "s"
+    , "t"
+    , "u"
+    , "v"
+    , "w"
+    , "x"
+    , "y"
+    , "z"
     ]
 
 
@@ -188,7 +224,7 @@ type FrontendMsg
     | BoxRedTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | BoxBlueTextureLoaded (Result WebGL.Texture.Error (Scene3d.Material.Texture Color))
     | CylinderMeshLoaded (Result Http.Error (Scene3d.Mesh.Textured BodyCoordinates))
-    | LetterLoaded Char (Result String ( Scene3d.Mesh.Textured BodyCoordinates, Scene3d.Material.Texture Color ))
+    | LetterLoaded String (Result String ( Scene3d.Mesh.Textured BodyCoordinates, Scene3d.Material.Texture Color ))
       --
       --
     | UserChosePlayWithStranger
