@@ -168,10 +168,10 @@ loadBox =
                                     )
                             , timeout = Nothing
                             }
-                            |> Task.mapError Debug.toString
+                            |> Task.mapError (\_ -> "Failed to load '" ++ letter ++ "' model")
                         )
                         (Scene3d.Material.load ("/assets/box_red_letter_" ++ letter ++ ".png")
-                            |> Task.mapError Debug.toString
+                            |> Task.mapError (\_ -> "Failed to load '" ++ letter ++ "' texture")
                         )
                         |> Task.attempt (LetterLoaded letter)
                 )
@@ -306,8 +306,8 @@ update msg model =
 
         --
         BoxMeshLoaded (Err err) ->
-            -- Debug.todo (Debug.toString err)
-            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            -- ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            ( { model | setup = loadAssetFailure "Asset load failure" model.setup }, Cmd.none )
 
         BoxMeshLoaded (Ok boxMesh) ->
             ( { model
@@ -318,8 +318,8 @@ update msg model =
             )
 
         BoxRedTextureLoaded (Err err) ->
-            -- Debug.todo (Debug.toString err)
-            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            -- ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            ( { model | setup = loadAssetFailure "Asset load failure" model.setup }, Cmd.none )
 
         BoxRedTextureLoaded (Ok texture) ->
             ( { model
@@ -330,8 +330,8 @@ update msg model =
             )
 
         BoxBlueTextureLoaded (Err err) ->
-            -- Debug.todo (Debug.toString err)
-            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            -- ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            ( { model | setup = loadAssetFailure "Asset load failure" model.setup }, Cmd.none )
 
         BoxBlueTextureLoaded (Ok texture) ->
             ( { model
@@ -342,8 +342,8 @@ update msg model =
             )
 
         CylinderMeshLoaded (Err err) ->
-            -- Debug.todo (Debug.toString err)
-            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            -- ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            ( { model | setup = loadAssetFailure "Asset load failure" model.setup }, Cmd.none )
 
         CylinderMeshLoaded (Ok cylinderMesh) ->
             ( { model
@@ -354,8 +354,8 @@ update msg model =
             )
 
         LetterLoaded letter (Err err) ->
-            -- Debug.todo (letter ++ ": " ++ Debug.toString err)
-            ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            -- ( { model | setup = loadAssetFailure (Debug.toString err) model.setup }, Cmd.none )
+            ( { model | setup = loadAssetFailure err model.setup }, Cmd.none )
 
         LetterLoaded letter (Ok ( mesh, texture )) ->
             ( { model
