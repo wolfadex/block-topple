@@ -295,79 +295,13 @@ updateFromFrontend sessionId clientId msg model =
                                         game.players
                                 in
                                 if sessionId == left && game.turn == leftTurn || sessionId == right && game.turn == rightTurn then
-                                    let
-                                        impulse =
-                                            Vector3d.withLength
-                                                (Quantity.times (Duration.seconds 0.005)
-                                                    (Force.meganewtons forceF)
-                                                )
-                                                ((case game.turn of
-                                                    Red ->
-                                                        Direction3d.negativeX
-
-                                                    Blue ->
-                                                        Direction3d.positiveX
-                                                 )
-                                                    |> Direction3d.rotateAround
-                                                        (case game.turn of
-                                                            Red ->
-                                                                Direction3d.positiveY
-
-                                                            Blue ->
-                                                                Direction3d.negativeY
-                                                        )
-                                                        (Angle.degrees elevationF)
-                                                    |> Direction3d.rotateAround
-                                                        Direction3d.negativeZ
-                                                        (Angle.degrees rotationF)
-                                                )
-                                    in
                                     Just
                                         ( left
                                         , right
                                         , runTurn
                                             { game
                                                 | stage = Simulating
-                                                , bodies =
-                                                    List.map
-                                                        (\( id, body ) ->
-                                                            ( id
-                                                            , case id of
-                                                                RedBall _ _ ->
-                                                                    case game.turn of
-                                                                        Red ->
-                                                                            Physics.applyImpulse
-                                                                                impulse
-                                                                                (Physics.centerOfMass body
-                                                                                    |> Maybe.withDefault Point3d.origin
-                                                                                    |> Point3d.translateBy
-                                                                                        (Vector3d.scaleTo ballRadius impulse)
-                                                                                )
-                                                                                body
-
-                                                                        Blue ->
-                                                                            body
-
-                                                                BlueBall _ _ ->
-                                                                    case game.turn of
-                                                                        Blue ->
-                                                                            Physics.applyImpulse
-                                                                                impulse
-                                                                                (Physics.centerOfMass body
-                                                                                    |> Maybe.withDefault Point3d.origin
-                                                                                    |> Point3d.translateBy
-                                                                                        (Vector3d.scaleTo ballRadius impulse)
-                                                                                )
-                                                                                body
-
-                                                                        Red ->
-                                                                            body
-
-                                                                _ ->
-                                                                    body
-                                                            )
-                                                        )
-                                                        game.bodies
+                                                , bodies = applyImpulseToBodies game.turn elevationF rotationF forceF game.bodies
                                             }
                                         )
 

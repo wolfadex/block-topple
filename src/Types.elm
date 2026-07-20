@@ -710,3 +710,72 @@ countFallenTowers contacts =
                         total
             )
             ( 0, 0 )
+
+
+applyImpulseToBodies : Turn -> Float -> Float -> Float -> List ( Id, Body ) -> List ( Id, Body )
+applyImpulseToBodies turn elevationF rotationF forceF =
+    let
+        impulse =
+            Vector3d.withLength
+                (Quantity.times (Duration.seconds 0.005)
+                    (Force.meganewtons forceF)
+                )
+                ((case turn of
+                    Red ->
+                        Direction3d.negativeX
+
+                    Blue ->
+                        Direction3d.positiveX
+                 )
+                    |> Direction3d.rotateAround
+                        (case turn of
+                            Red ->
+                                Direction3d.positiveY
+
+                            Blue ->
+                                Direction3d.negativeY
+                        )
+                        (Angle.degrees elevationF)
+                    |> Direction3d.rotateAround
+                        Direction3d.negativeZ
+                        (Angle.degrees rotationF)
+                )
+    in
+    List.map
+        (\( id, body ) ->
+            ( id
+            , case id of
+                RedBall _ _ ->
+                    case turn of
+                        Red ->
+                            Physics.applyImpulse
+                                impulse
+                                (Physics.centerOfMass body
+                                    |> Maybe.withDefault Point3d.origin
+                                    |> Point3d.translateBy
+                                        (Vector3d.scaleTo ballRadius impulse)
+                                )
+                                body
+
+                        Blue ->
+                            body
+
+                BlueBall _ _ ->
+                    case turn of
+                        Blue ->
+                            Physics.applyImpulse
+                                impulse
+                                (Physics.centerOfMass body
+                                    |> Maybe.withDefault Point3d.origin
+                                    |> Point3d.translateBy
+                                        (Vector3d.scaleTo ballRadius impulse)
+                                )
+                                body
+
+                        Red ->
+                            body
+
+                _ ->
+                    body
+            )
+        )

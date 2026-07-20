@@ -616,75 +616,9 @@ updateCameraElevation delta directions elevation =
 
 fireBall : Float -> Float -> Float -> GameFrontend -> GameFrontend
 fireBall elevationF rotationF forceF model =
-    let
-        impulse =
-            Vector3d.withLength
-                (Quantity.times (Duration.seconds 0.005)
-                    (Force.meganewtons forceF)
-                )
-                ((case model.turn of
-                    Red ->
-                        Direction3d.negativeX
-
-                    Blue ->
-                        Direction3d.positiveX
-                 )
-                    |> Direction3d.rotateAround
-                        (case model.turn of
-                            Red ->
-                                Direction3d.positiveY
-
-                            Blue ->
-                                Direction3d.negativeY
-                        )
-                        (Angle.degrees elevationF)
-                    |> Direction3d.rotateAround
-                        Direction3d.negativeZ
-                        (Angle.degrees rotationF)
-                )
-    in
     { model
         | stage = Simulating
-        , bodies =
-            List.map
-                (\( id, body ) ->
-                    ( id
-                    , case id of
-                        RedBall _ _ ->
-                            case model.turn of
-                                Red ->
-                                    Physics.applyImpulse
-                                        impulse
-                                        (Physics.centerOfMass body
-                                            |> Maybe.withDefault Point3d.origin
-                                            |> Point3d.translateBy
-                                                (Vector3d.scaleTo ballRadius impulse)
-                                        )
-                                        body
-
-                                Blue ->
-                                    body
-
-                        BlueBall _ _ ->
-                            case model.turn of
-                                Blue ->
-                                    Physics.applyImpulse
-                                        impulse
-                                        (Physics.centerOfMass body
-                                            |> Maybe.withDefault Point3d.origin
-                                            |> Point3d.translateBy
-                                                (Vector3d.scaleTo ballRadius impulse)
-                                        )
-                                        body
-
-                                Red ->
-                                    body
-
-                        _ ->
-                            body
-                    )
-                )
-                model.bodies
+        , bodies = applyImpulseToBodies model.turn elevationF rotationF forceF model.bodies
     }
 
 
