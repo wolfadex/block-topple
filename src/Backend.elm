@@ -4,8 +4,6 @@ import Angle exposing (Angle)
 import Axis3d exposing (Axis3d)
 import Block3d exposing (Block3d)
 import Browser exposing (UrlRequest)
-import Browser.Dom
-import Browser.Events
 import Browser.Navigation exposing (Key)
 import Camera3d exposing (Camera3d)
 import Color exposing (Color)
@@ -51,7 +49,6 @@ import TriangularMesh exposing (TriangularMesh)
 import Types exposing (..)
 import Url exposing (Url)
 import Vector3d exposing (Vector3d)
-import WebGL.Texture
 
 
 app =
@@ -182,6 +179,57 @@ update msg model =
                 Just waitingId ->
                     startMatch sessionId waitingId model
 
+        DoGameSimulation sessionId elevationF rotationF forceF ->
+            let
+                ( rooms, updatedGame ) =
+                    listUpdateWhen
+                        (\(( left, right, game )) ->
+                            if sessionId == left || sessionId == right then
+                                let
+                                    ( ( _, leftTurn ), ( _, rightTurn ) ) =
+                                        game.players
+                                            |> Debug.log "QWE: game found and updating"
+                                in
+                                if sessionId == left && game.turn == leftTurn || sessionId == right && game.turn == rightTurn then
+                                    Just
+                                        ( left
+                                        , right
+                                        , runTurn
+                                            { game
+                                                | stage = Simulating
+                                                , bodies = applyImpulseToBodies game.turn elevationF rotationF forceF game.bodies
+                                            }
+                                        )
+
+                                else
+                                    Nothing
+
+                            else
+                                Nothing
+                        )
+                        model.rooms
+            in
+            ( {model | rooms = rooms }
+            , case updatedGame of
+                Just ( left, right, game ) ->
+                    let
+                        gameDetails =
+                            { bodies = game.bodies
+                            , contacts = game.contacts
+                            , turn = game.turn
+                            , stage = game.stage
+                            , redTowersRemaining = game.redTowersRemaining
+                            , blueTowersRemaining = game.blueTowersRemaining
+                            }
+                            |> Debug.log "QWE: game updated, preparing to forward to clients"
+                    in
+                    Process.sleep (5 * 1000)
+                        |> Task.perform (\() -> GameUpdateElapsed left right gameDetails)
+
+                Nothing ->
+                    Cmd.none
+            )
+
         GameUpdateElapsed left right gameDetails ->
             ( model
             , Cmd.batch
@@ -285,54 +333,12 @@ updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( Bac
 updateFromFrontend sessionId clientId msg model =
     case msg of
         Fire elevationF rotationF forceF ->
-            let
-                ( rooms, updatedGame ) =
-                    listUpdateWhen
-                        (\(( left, right, game ) as room) ->
-                            if sessionId == left || sessionId == right then
-                                let
-                                    ( ( _, leftTurn ), ( _, rightTurn ) ) =
-                                        game.players
-                                            |> Debug.log "QWE: game found and updating"
-                                in
-                                if sessionId == left && game.turn == leftTurn || sessionId == right && game.turn == rightTurn then
-                                    Just
-                                        ( left
-                                        , right
-                                        , runTurn
-                                            { game
-                                                | stage = Simulating
-                                                , bodies = applyImpulseToBodies game.turn elevationF rotationF forceF game.bodies
-                                            }
-                                        )
-
-                                else
-                                    Nothing
-
-                            else
-                                Nothing
-                        )
-                        model.rooms
-            in
-            ( { model
-                | rooms = rooms
-              }
-            , case updatedGame of
-                Just ( left, right, game ) ->
-                    let
-                        gameDetails =
-                            { bodies = game.bodies
-                            , contacts = game.contacts
-                            , turn = game.turn
-                            , stage = game.stage
-                            , redTowersRemaining = game.redTowersRemaining
-                            , blueTowersRemaining = game.blueTowersRemaining
-                            }
-                            |> Debug.log "QWE: game updated, preparing to forward to clients"
-                    in
+            ( model
+            , case listFindMap (\(left, right, _) -> if sessionId == left || sessionId == right then Just (left, right) else Nothing) model.rooms of
+                Just ( left, right ) ->
                     Cmd.batch
-                        [ Process.sleep (5 * 1000)
-                            |> Task.perform (\() -> GameUpdateElapsed left right gameDetails)
+                        [ Process.sleep 0
+                            |> Task.perform (\() -> DoGameSimulation sessionId elevationF rotationF forceF)
                         , Lamdera.sendToFrontend
                             (if sessionId == left then
                                 right

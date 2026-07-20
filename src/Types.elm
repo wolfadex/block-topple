@@ -281,6 +281,7 @@ type BackendMsg
     = OnConnect SessionId ClientId
     | OnDisconnect SessionId ClientId
     | UserHasLeft SessionId
+    | DoGameSimulation Lamdera.SessionId Float Float Float
     | GameUpdateElapsed SessionId SessionId TurnChangeGame
     | SeedInitialized Random.Seed
 
