@@ -25,7 +25,7 @@ import Lamdera exposing (ClientId, SessionId)
 import Length exposing (Length, Meters)
 import Obj.Decode
 import Parameter1d
-import Physics exposing (Body, BodyCoordinates, WorldCoordinates, onEarth)
+import Physics exposing (BodyCoordinates, WorldCoordinates, onEarth)
 import Physics.Constraint exposing (Constraint)
 import Physics.Material
 import Physics.Shape
@@ -142,8 +142,8 @@ type Page
 type alias GameFrontend =
     { myColor : Turn
     , opponentDisconnected : Maybe Duration
-    , bodies : List ( Id, Body )
-    , prevBodies : List ( Id, Body )
+    , bodies : List ( Id, Physics.Body )
+    , prevBodies : List ( Id, Physics.Body )
     , contacts : Physics.Contacts Id
     , elevantionRaw : String
     , rotationRaw : String
@@ -173,7 +173,7 @@ type alias BackendModel =
 
 type alias Game =
     { players : ( ( SessionId, Turn ), ( SessionId, Turn ) )
-    , bodies : List ( Id, Body )
+    , bodies : List ( Id, Physics.Body )
     , contacts : Physics.Contacts Id
     , turn : Turn
     , stage : Stage
@@ -304,7 +304,7 @@ type ToFrontend
 
 type alias GameRejoin =
     { yourColor : Turn
-    , bodies : List ( Id, Body )
+    , bodies : List ( Id, Physics.Body )
     , contacts : Physics.Contacts Id
     , turn : Turn
     , stage : Stage
@@ -316,7 +316,7 @@ type alias GameRejoin =
 
 
 type alias TurnChangeGame =
-    { bodies : List ( Id, Body )
+    { bodies : List ( Id, Physics.Body )
     , contacts : Physics.Contacts Id
     , turn : Turn
     , stage : Stage
@@ -331,7 +331,7 @@ type alias TurnChangeGame =
 --
 
 
-initBodiesTest : List ( Id, Body )
+initBodiesTest : List ( Id, Physics.Body )
 initBodiesTest =
     List.concat
         [ [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
@@ -342,12 +342,12 @@ initBodiesTest =
         ]
 
 
-initBodies : List ( Id, Body )
+initBodies : List ( Id, Physics.Body )
 initBodies =
     initBodiesBoxCastle
 
 
-initBodiesBoxCastle : List ( Id, Body )
+initBodiesBoxCastle : List ( Id, Physics.Body )
 initBodiesBoxCastle =
     List.concat
         [ [ ( Floor, Physics.plane Plane3d.xy Physics.Material.wood )
@@ -640,7 +640,7 @@ ballRadius =
 --
 
 
-countAllTowers : List ( Id, Body ) -> ( Int, Int )
+countAllTowers : List ( Id, Physics.Body ) -> ( Int, Int )
 countAllTowers bodies =
     List.foldl
         (\( id, _ ) (( blue, red ) as total) ->
@@ -712,7 +712,7 @@ countFallenTowers contacts =
             ( 0, 0 )
 
 
-applyImpulseToBodies : Turn -> Float -> Float -> Float -> List ( Id, Body ) -> List ( Id, Body )
+applyImpulseToBodies : Turn -> Float -> Float -> Float -> List ( Id, Physics.Body ) -> List ( Id, Physics.Body )
 applyImpulseToBodies turn elevationF rotationF forceF =
     let
         impulse =
@@ -779,3 +779,112 @@ applyImpulseToBodies turn elevationF rotationF forceF =
                     body
             )
         )
+
+
+simulateStep :
+    { g
+        | stage : Stage
+        , elapsed : Duration
+        , timestep : Timestep
+        , contacts : Physics.Contacts Id
+        , bodies : List ( Id, Physics.Body )
+        , blueTowersRemaining : Int
+        , redTowersRemaining : Int
+        , turn : Turn
+    }
+    ->
+        { g
+            | stage : Stage
+            , elapsed : Duration
+            , timestep : Timestep
+            , contacts : Physics.Contacts Id
+            , bodies : List ( Id, Physics.Body )
+            , blueTowersRemaining : Int
+            , redTowersRemaining : Int
+            , turn : Turn
+        }
+simulateStep model =
+    let
+        ( simulated, newContacts ) =
+            Physics.simulate
+                { onEarth
+                    | contacts = model.contacts
+                    , duration = Timestep.duration model.timestep
+                }
+                model.bodies
+
+        newElapsed =
+            case model.stage of
+                Aiming ->
+                    model.elapsed
+
+                Simulating ->
+                    Quantity.plus model.elapsed (Timestep.duration model.timestep)
+
+                GameOver _ ->
+                    model.elapsed
+
+        ( blueTowers, redTowers ) =
+            countAllTowers simulated
+
+        ( fallenBlueTowers, fallenRedTowers ) =
+            countFallenTowers newContacts
+
+        newModel =
+            { model
+                | bodies = simulated
+                , contacts = newContacts
+                , elapsed = newElapsed
+                , redTowersRemaining = redTowers - fallenRedTowers
+                , blueTowersRemaining = blueTowers - fallenBlueTowers
+            }
+    in
+    if newModel.redTowersRemaining < 1 then
+        { newModel
+            | stage = GameOver Blue
+        }
+
+    else if newModel.blueTowersRemaining < 1 then
+        { newModel
+            | stage = GameOver Red
+        }
+
+    else if newElapsed |> Quantity.greaterThanOrEqualTo (Duration.seconds 5) then
+        { newModel
+            | stage = Aiming
+            , turn =
+                case newModel.turn of
+                    Red ->
+                        Blue
+
+                    Blue ->
+                        Red
+            , elapsed = Duration.seconds 0
+            , bodies =
+                (case newModel.turn of
+                    Red ->
+                        initBlueBall
+
+                    Blue ->
+                        initRedBall
+                )
+                    :: List.filterMap
+                        (\( id, body ) ->
+                            case id of
+                                RedBall _ _ ->
+                                    Nothing
+
+                                BlueBall _ _ ->
+                                    Nothing
+
+                                _ ->
+                                    Just
+                                        ( id
+                                        , body
+                                        )
+                        )
+                        newModel.bodies
+        }
+
+    else
+        newModel
