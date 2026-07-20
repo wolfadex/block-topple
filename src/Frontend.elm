@@ -533,7 +533,7 @@ updateGame feModel msg model =
                     of
                         ( Just elevationF, Just rotationF, Just forceF ) ->
                             ( fireBall elevationF rotationF forceF model
-                            , Lamdera.sendToBackend (Fire elevationF rotationF forceF)
+                            , Lamdera.sendToBackend (Fire elevationF rotationF forceF |> Debug.log "QWE: user fired, forward to backend")
                             )
 
                         _ ->
@@ -798,7 +798,7 @@ updateFromBackend msg model =
 
                 InGame game ->
                     ( { model | page = InGame (fireBall elevationF rotationF forceF game) }
-                    , Cmd.none
+                    , Cmd.none |> Debug.log "QWE: other player fired"
                     )
 
         OpponentDisconnected ->

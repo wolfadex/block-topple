@@ -185,8 +185,8 @@ update msg model =
         GameUpdateElapsed left right gameDetails ->
             ( model
             , Cmd.batch
-                [ Lamdera.sendToFrontend left (TurnChange gameDetails)
-                , Lamdera.sendToFrontend right (TurnChange gameDetails)
+                [ Lamdera.sendToFrontend (left |> Debug.log "QWE: update elapsed, sending to...") (TurnChange gameDetails)
+                , Lamdera.sendToFrontend (right |> Debug.log "QWE: update elapsed, sending to...") (TurnChange gameDetails)
                 ]
             )
 
@@ -293,6 +293,7 @@ updateFromFrontend sessionId clientId msg model =
                                 let
                                     ( ( _, leftTurn ), ( _, rightTurn ) ) =
                                         game.players
+                                            |> Debug.log "QWE: game found and updating"
                                 in
                                 if sessionId == left && game.turn == leftTurn || sessionId == right && game.turn == rightTurn then
                                     Just
@@ -327,6 +328,7 @@ updateFromFrontend sessionId clientId msg model =
                             , redTowersRemaining = game.redTowersRemaining
                             , blueTowersRemaining = game.blueTowersRemaining
                             }
+                            |> Debug.log "QWE: game updated, preparing to forward to clients"
                     in
                     Cmd.batch
                         [ Process.sleep (5 * 1000)
@@ -338,7 +340,7 @@ updateFromFrontend sessionId clientId msg model =
                              else
                                 left
                             )
-                            (OtherPlayerFired elevationF rotationF forceF)
+                            (OtherPlayerFired elevationF rotationF forceF |> Debug.log "QWE: send 'fire' to other player")
                         ]
 
                 Nothing ->
